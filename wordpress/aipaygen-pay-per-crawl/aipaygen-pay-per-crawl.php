@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.0.0
+ * Version:           2.1.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -101,7 +101,7 @@ function aipaygen_ppc_maybe_charge() {
 		}
 		// Unpaid AI crawler: answer with the price here; it never reaches AIPayGen.
 		aipaygen_ppc_count( $bot, (string) wp_parse_url( $path, PHP_URL_PATH ) );
-		aipaygen_ppc_local_402( $route, home_url( $path ) );
+		aipaygen_ppc_local_402( $route, home_url( $path ), $bot );
 		return; // No quote available right now: serve the page as usual.
 	}
 
@@ -158,11 +158,17 @@ function aipaygen_ppc_quote( $route ) {
 	return $q;
 }
 
-/** Answer an unpaid AI crawler with HTTP 402 and the route's price, then stop. Returns if no quote. */
-function aipaygen_ppc_local_402( $route, $url ) {
+/** Answer an unpaid AI crawler with HTTP 402 and the route's price, then stop. Returns (page served) if no quote or the bot is let in free. */
+function aipaygen_ppc_local_402( $route, $url, $bot = '' ) {
 	$q = aipaygen_ppc_quote( $route );
 	if ( ! $q ) {
 		return;
+	}
+	// Bots this site lets in free (its route's settings, e.g. AI search in "training" mode).
+	foreach ( ( isset( $q['free_bots'] ) && is_array( $q['free_bots'] ) ) ? $q['free_bots'] : array() as $free ) {
+		if ( 0 === strcasecmp( (string) $free, (string) $bot ) ) {
+			return;
+		}
 	}
 	$quote = array(
 		'x402Version' => 2,

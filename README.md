@@ -38,6 +38,18 @@ curl -i -A GPTBot https://your-site.com/   # 402 with your price
 curl -I https://your-site.com/             # 200 for everyone else
 ```
 
+## Charge only training crawlers
+
+Want AI search and assistants (OAI-SearchBot, ChatGPT-User, PerplexityBot, Claude-SearchBot...) to keep reading free so they can cite you, and charge only crawlers that collect training data? Pick that at signup, or switch any time:
+
+```bash
+curl -X PATCH https://aipaygen.com/v1/gateway/YOUR_ROUTE_ID \
+  -H "authorization: Bearer YOUR_API_KEY" -H "content-type: application/json" \
+  -d '{"charge_mode":"training"}'
+```
+
+The WordPress plugin and the Cloudflare, Next.js and Express snippets pick it up within an hour, with no reinstall. On Nginx and Apache, remove those names from the bot list in the config.
+
 ## Which AI crawlers are covered
 
 GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, anthropic-ai, PerplexityBot, Perplexity-User, Google-Extended, GoogleOther, CCBot, Bytespider, Amazonbot, Applebot-Extended, meta-externalagent, FacebookBot, cohere-ai, Diffbot, YouBot, MistralAI-User, DuckAssistBot, PetalBot, Timpibot, ImagesiftBot, omgili, AI2Bot, ElevenlabsCrawler, ElevenlabsBot. What each one does: https://aipaygen.com/ai-crawlers

@@ -42,6 +42,8 @@ async function aipaygen402(url, bot, path) {
   if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
   const q = await aipaygenQuote();
   if (!q) return null;
+  // Bots this site lets in free (its route's settings, e.g. AI search in "training" mode): serve the page.
+  if ((q.free_bots || []).some((b) => b.toLowerCase() === String(bot).toLowerCase())) return null;
   const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
   return new Response(JSON.stringify({ ...quote, help: q.help }), {
     status: 402,
