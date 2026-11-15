@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.3.0
+ * Version:           2.3.1
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -332,7 +332,7 @@ function aipaygen_ppc_settings_page() {
 	<div class="wrap">
 		<h1><?php echo esc_html__( 'AIPayGen pay-per-crawl', 'aipaygen-pay-per-crawl' ); ?></h1>
 		<p>
-			<?php echo esc_html__( 'Create a free route for this site (your price per page and your wallet), then paste the route id and gateway secret here:', 'aipaygen-pay-per-crawl' ); ?>
+			<?php echo esc_html__( 'Create a free route for this site (no wallet needed to start with the report; add one when you want to charge), then paste the route id and gateway secret here:', 'aipaygen-pay-per-crawl' ); ?>
 			<a href="<?php echo esc_url( AIPAYGEN_PPC_GATEWAY . '/pay-per-crawl#signup' ); ?>" target="_blank" rel="noopener"><?php echo esc_html__( 'create a route', 'aipaygen-pay-per-crawl' ); ?></a>
 		</p>
 		<form method="post" action="options.php">
@@ -356,10 +356,18 @@ function aipaygen_ppc_settings_page() {
 				<?php echo esc_html__( '(keep this link private; counts arrive hourly)', 'aipaygen-pay-per-crawl' ); ?>
 			</p>
 		<?php endif; ?>
-		<p>
-			<?php echo esc_html__( 'Check it from a terminal; it should answer 402 with your price:', 'aipaygen-pay-per-crawl' ); ?>
-			<code>curl -i -A GPTBot <?php echo esc_html( home_url( '/' ) ); ?></code>
-		</p>
+		<?php
+		$aipaygen_ppc_q = get_option( 'aipaygen_ppc_route', '' ) ? aipaygen_ppc_quote( (string) get_option( 'aipaygen_ppc_route', '' ) ) : false;
+		$aipaygen_ppc_off = is_array( $aipaygen_ppc_q ) && isset( $aipaygen_ppc_q['charge_mode'] ) && 'off' === $aipaygen_ppc_q['charge_mode'];
+		?>
+		<?php if ( $aipaygen_ppc_off ) : ?>
+			<p><?php echo esc_html__( 'Report-only mode: AI crawlers still get your pages and are counted for the report. To start charging, add your wallet to the route (the report shows how); this plugin picks it up within an hour.', 'aipaygen-pay-per-crawl' ); ?></p>
+		<?php else : ?>
+			<p>
+				<?php echo esc_html__( 'Check it from a terminal; it should answer 402 with your price:', 'aipaygen-pay-per-crawl' ); ?>
+				<code>curl -i -A GPTBot <?php echo esc_html( home_url( '/' ) ); ?></code>
+			</p>
+		<?php endif; ?>
 	</div>
 	<?php
 }

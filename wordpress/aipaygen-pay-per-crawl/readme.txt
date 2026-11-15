@@ -2,9 +2,9 @@
 Contributors: aipaygen
 Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
-Tested up to: 6.9
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.3.0
+Stable tag: 2.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -37,9 +37,9 @@ Privacy policy: https://aipaygen.com/privacy
 == Installation ==
 
 1. Install and activate the plugin.
-2. Create a free route for your site at https://aipaygen.com/pay-per-crawl (your site address, a price per page and your wallet address on Base).
+2. Create a free route for your site at https://aipaygen.com/pay-per-crawl: your site address and a price per page. Start with "None yet" to only see the report (no wallet needed), or add your wallet address on Base to charge.
 3. In WordPress, go to Settings > AIPayGen pay-per-crawl and paste the route id and gateway secret.
-4. Check it: `curl -i -A GPTBot https://your-site.com/` should answer 402 with your price.
+4. Check it: in report-only mode your report shows AI crawler visits within about an hour. When charging, `curl -i -A GPTBot https://your-site.com/` should answer 402 with your price.
 
 == Frequently Asked Questions ==
 
@@ -60,6 +60,9 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.3.1 =
+* Settings page and install steps explain report-only mode. Only real user agents are matched (Google-Extended and Applebot-Extended are robots.txt tokens, not crawlers).
 
 = 2.3.0 =
 * Report-only mode: install without a wallet, see which AI crawlers visit and what they would have paid, and start charging later from the same route.
