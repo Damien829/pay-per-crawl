@@ -38,7 +38,7 @@ curl -I https://your-site.com/             # 200 for everyone else
 
 ## Which AI crawlers are covered
 
-GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, anthropic-ai, PerplexityBot, Perplexity-User, Google-Extended, GoogleOther, CCBot, Bytespider, Amazonbot, Applebot-Extended, meta-externalagent, FacebookBot, cohere-ai, Diffbot, YouBot, MistralAI-User, DuckAssistBot, PetalBot, Timpibot, ImagesiftBot, omgili, AI2Bot. What each one does: https://aipaygen.com/ai-crawlers
+GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, anthropic-ai, PerplexityBot, Perplexity-User, Google-Extended, GoogleOther, CCBot, Bytespider, Amazonbot, Applebot-Extended, meta-externalagent, FacebookBot, cohere-ai, Diffbot, YouBot, MistralAI-User, DuckAssistBot, PetalBot, Timpibot, ImagesiftBot, omgili, AI2Bot, ElevenlabsCrawler, ElevenlabsBot. What each one does: https://aipaygen.com/ai-crawlers
 
 Which ones does your site block today? Free check: https://aipaygen.com/ai-crawlers · Data on 60 top sites: https://aipaygen.com/state-of-ai-crawlers
 
