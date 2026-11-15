@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           1.3.0
+ * Version:           2.0.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -89,9 +89,20 @@ function aipaygen_ppc_maybe_charge() {
 	$ua   = aipaygen_ppc_header( 'user-agent' );
 	$sig  = aipaygen_ppc_header( 'payment-signature' );
 	$xpay = aipaygen_ppc_header( 'x-payment' );
-	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-	if ( ! preg_match( AIPAYGEN_PPC_BOTS, $ua ) && '' === $sig && '' === $xpay && ! aipaygen_ppc_ai_ip( $ip ) ) {
-		return; // People and search engines browse free.
+	$ip   = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+	$path = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+	if ( '' === $path || '/' !== $path[0] ) {
+		$path = '/';
+	}
+	if ( '' === $sig && '' === $xpay ) {
+		$bot = preg_match( AIPAYGEN_PPC_BOTS, $ua, $m ) ? $m[0] : ( aipaygen_ppc_ai_ip( $ip ) ? 'AI crawler (by IP)' : '' );
+		if ( '' === $bot ) {
+			return; // People and search engines browse free.
+		}
+		// Unpaid AI crawler: answer with the price here; it never reaches AIPayGen.
+		aipaygen_ppc_count( $bot, (string) wp_parse_url( $path, PHP_URL_PATH ) );
+		aipaygen_ppc_local_402( $route, home_url( $path ) );
+		return; // No quote available right now: serve the page as usual.
 	}
 
 	$headers = array(
@@ -104,10 +115,7 @@ function aipaygen_ppc_maybe_charge() {
 	if ( '' !== $xpay ) {
 		$headers['x-payment'] = $xpay;
 	}
-	$path = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
-	if ( '' === $path || '/' !== $path[0] ) {
-		$path = '/';
-	}
+	// A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
 	$res = wp_remote_get(
 		AIPAYGEN_PPC_GATEWAY . '/g/' . $route . $path,
 		array(
@@ -133,6 +141,108 @@ function aipaygen_ppc_maybe_charge() {
 	exit;
 }
 add_action( 'init', 'aipaygen_ppc_maybe_charge', 0 );
+
+/** This route's price quote from AIPayGen, cached for an hour (false if unavailable). */
+function aipaygen_ppc_quote( $route ) {
+	$q = get_transient( 'aipaygen_ppc_quote' );
+	if ( is_array( $q ) && isset( $q['route'] ) && $q['route'] === $route ) {
+		return $q;
+	}
+	$res = wp_remote_get( AIPAYGEN_PPC_GATEWAY . '/v1/gateway/quote/' . $route, array( 'timeout' => 5 ) );
+	$q   = is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ? null : json_decode( (string) wp_remote_retrieve_body( $res ), true );
+	if ( ! is_array( $q ) || empty( $q['accepts'] ) ) {
+		return false;
+	}
+	$q['route'] = $route;
+	set_transient( 'aipaygen_ppc_quote', $q, HOUR_IN_SECONDS );
+	return $q;
+}
+
+/** Answer an unpaid AI crawler with HTTP 402 and the route's price, then stop. Returns if no quote. */
+function aipaygen_ppc_local_402( $route, $url ) {
+	$q = aipaygen_ppc_quote( $route );
+	if ( ! $q ) {
+		return;
+	}
+	$quote = array(
+		'x402Version' => 2,
+		'error'       => 'PAYMENT_REQUIRED',
+		'resource'    => array(
+			'url'         => esc_url_raw( $url ),
+			'description' => isset( $q['description'] ) ? (string) $q['description'] : '',
+			'mimeType'    => 'text/html',
+		),
+		'accepts'     => $q['accepts'],
+	);
+	status_header( 402 );
+	header( 'content-type: application/json' );
+	header( 'cache-control: no-store' );
+	header( 'payment-required: ' . base64_encode( wp_json_encode( $quote ) ) );
+	echo wp_json_encode( array_merge( $quote, array( 'help' => isset( $q['help'] ) ? $q['help'] : null ) ) );
+	exit;
+}
+
+/** Count one AI crawler visit for the report (kept in an option, sent hourly). */
+function aipaygen_ppc_count( $bot, $path ) {
+	$c = get_option( 'aipaygen_ppc_counts', array() );
+	if ( ! is_array( $c ) ) {
+		$c = array();
+	}
+	$c['bots'][ $bot ] = ( isset( $c['bots'][ $bot ] ) ? (int) $c['bots'][ $bot ] : 0 ) + 1;
+	if ( '' !== $path && ( isset( $c['paths'][ $path ] ) || count( isset( $c['paths'] ) ? $c['paths'] : array() ) < 300 ) ) {
+		$c['paths'][ $path ] = ( isset( $c['paths'][ $path ] ) ? (int) $c['paths'][ $path ] : 0 ) + 1;
+	}
+	update_option( 'aipaygen_ppc_counts', $c, false );
+}
+
+/** Send the stored counts to AIPayGen (hourly, by WP-Cron) and clear them once accepted. */
+function aipaygen_ppc_send_counts() {
+	$route  = (string) get_option( 'aipaygen_ppc_route', '' );
+	$secret = (string) get_option( 'aipaygen_ppc_secret', '' );
+	$c      = get_option( 'aipaygen_ppc_counts', array() );
+	if ( '' === $route || '' === $secret || ! is_array( $c ) || empty( $c['bots'] ) ) {
+		return;
+	}
+	$paths = isset( $c['paths'] ) && is_array( $c['paths'] ) ? $c['paths'] : array();
+	arsort( $paths );
+	$res = wp_remote_post(
+		AIPAYGEN_PPC_GATEWAY . '/v1/gateway/hits/' . $route,
+		array(
+			'timeout' => 10,
+			'headers' => array(
+				'content-type'              => 'application/json',
+				'x-aipaygen-gateway-secret' => $secret,
+			),
+			'body'    => wp_json_encode(
+				array(
+					'counts' => $c['bots'],
+					'paths'  => (object) array_slice( $paths, 0, 10, true ),
+				)
+			),
+		)
+	);
+	if ( ! is_wp_error( $res ) && 200 === (int) wp_remote_retrieve_response_code( $res ) ) {
+		delete_option( 'aipaygen_ppc_counts' );
+	}
+}
+add_action( 'aipaygen_ppc_send_counts', 'aipaygen_ppc_send_counts' );
+
+function aipaygen_ppc_schedule() {
+	if ( ! wp_next_scheduled( 'aipaygen_ppc_send_counts' ) ) {
+		wp_schedule_event( time() + HOUR_IN_SECONDS, 'hourly', 'aipaygen_ppc_send_counts' );
+	}
+}
+add_action( 'init', 'aipaygen_ppc_schedule' );
+
+/** The private link to this site's AI crawler report (derived from the gateway secret). */
+function aipaygen_ppc_report_url() {
+	$route  = (string) get_option( 'aipaygen_ppc_route', '' );
+	$secret = (string) get_option( 'aipaygen_ppc_secret', '' );
+	if ( '' === $route || '' === $secret ) {
+		return '';
+	}
+	return AIPAYGEN_PPC_GATEWAY . '/pay-per-crawl/report/' . $route . '?t=' . substr( hash( 'sha256', $secret . ':report' ), 0, 24 );
+}
 
 function aipaygen_ppc_admin_menu() {
 	add_options_page(
@@ -185,6 +295,13 @@ function aipaygen_ppc_settings_page() {
 			</table>
 			<?php submit_button(); ?>
 		</form>
+		<?php if ( aipaygen_ppc_report_url() ) : ?>
+			<p>
+				<?php echo esc_html__( 'See which AI crawlers visit and what they would pay:', 'aipaygen-pay-per-crawl' ); ?>
+				<a href="<?php echo esc_url( aipaygen_ppc_report_url() ); ?>" target="_blank" rel="noopener"><?php echo esc_html__( 'your AI crawler report', 'aipaygen-pay-per-crawl' ); ?></a>
+				<?php echo esc_html__( '(keep this link private; counts arrive hourly)', 'aipaygen-pay-per-crawl' ); ?>
+			</p>
+		<?php endif; ?>
 		<p>
 			<?php echo esc_html__( 'Check it from a terminal; it should answer 402 with your price:', 'aipaygen-pay-per-crawl' ); ?>
 			<code>curl -i -A GPTBot <?php echo esc_html( home_url( '/' ) ); ?></code>
@@ -197,5 +314,8 @@ function aipaygen_ppc_uninstall() {
 	delete_option( 'aipaygen_ppc_route' );
 	delete_option( 'aipaygen_ppc_secret' );
 	delete_transient( 'aipaygen_ppc_ai_ips' );
+	delete_transient( 'aipaygen_ppc_quote' );
+	delete_option( 'aipaygen_ppc_counts' );
+	wp_clear_scheduled_hook( 'aipaygen_ppc_send_counts' );
 }
 register_uninstall_hook( __FILE__, 'aipaygen_ppc_uninstall' );

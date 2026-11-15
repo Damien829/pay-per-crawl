@@ -6,12 +6,12 @@ It uses [x402](https://aipaygen.com/x402), the open protocol for paying over HTT
 
 ## How it works
 
-1. A request from a known AI crawler is passed to the AIPayGen gateway on the same path. Crawlers are recognized by user agent, and by address: requests from the IP ranges OpenAI, Perplexity, DuckDuckGo and Common Crawl publish are charged even when they claim to be a browser (list refreshed daily from https://aipaygen.com/v1/ai_bot_ips). Requests already carrying an x402 payment go to the gateway too.
-2. Unpaid, the gateway answers `402` with your price and your wallet address.
-3. Paid, the gateway verifies the payment, fetches the page from your site with a secret header (which these snippets let through), settles the payment to your wallet and returns the page.
-4. Everyone else is served by your site as usual. If your site errors, nobody is charged. Agents without a wallet can still pay through the gateway's `paid_fetch` tool.
+1. A request from a known AI crawler (by user agent, or from the IP ranges OpenAI, Perplexity, DuckDuckGo and Common Crawl publish; list refreshed daily from https://aipaygen.com/v1/ai_bot_ips) gets `402 Payment Required` with your price, **answered by your own server** from a quote it fetches about once an hour. Unpaid crawler visits never leave your site.
+2. A crawler that pays retries with an x402 payment header. That request goes to the AIPayGen gateway, which verifies the payment, fetches the page from your site with a secret header (which these snippets let through), settles the payment to your wallet and returns the page.
+3. Everyone else is served by your site as usual. If your site errors, nobody is charged. If AIPayGen can't be reached, your pages are served as usual.
+4. Visit counts (crawler name and the 10 most-requested paths, no visitor data) are sent in small batches, so you get a private **AI crawler report**: which bots visit, how often, and what they would have paid. The link is shown at signup and in the WordPress plugin's settings.
 
-No fees to site owners; the gateway never holds your money.
+Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Apache is the exception: its snippet sends unpaid crawlers to the gateway for the price, and doesn't report counts. Nginx answers locally but doesn't report counts either.)
 
 ## Setup
 

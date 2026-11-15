@@ -25,14 +25,56 @@ async function isAiIp(ip) {
   const x = ip ? ipNum(ip) : null;
   return !!x && AI_NETS.some(([v, s, b]) => v === x[0] && x[1] >> s === b);
 }
+// Answer AI crawlers here with your price; only paid retries go to AIPayGen.
+const [AIPAYGEN, ROUTE] = GATEWAY.split("/g/");
+let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = Date.now();
+async function aipaygenQuote() {
+  if (!QUOTE || Date.now() - QUOTE_AT > 36e5) {
+    try {
+      const r = await fetch(AIPAYGEN + "/v1/gateway/quote/" + ROUTE, { signal: AbortSignal.timeout(3000) });
+      if (r.ok) { QUOTE = await r.json(); QUOTE_AT = Date.now(); }
+    } catch {}
+  }
+  return QUOTE;
+}
+async function aipaygen402(url, bot, path) {
+  HITS[bot] = (HITS[bot] || 0) + 1; HIT_N++;
+  if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
+  const q = await aipaygenQuote();
+  if (!q) return null;
+  const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
+  return new Response(JSON.stringify({ ...quote, help: q.help }), {
+    status: 402,
+    headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(JSON.stringify(quote)) },
+  });
+}
+// Visit counts for your AI crawler report, sent every few minutes in one small request.
+async function aipaygenReport(secret) {
+  const every = (QUOTE && QUOTE.report) || { every_seconds: 600, max_hits: 500 };
+  if (!secret || !HIT_N || (HIT_N < every.max_hits && Date.now() - SENT_AT < every.every_seconds * 1000)) return;
+  const pages = Object.fromEntries(Object.entries(PAGES).sort((a, b) => b[1] - a[1]).slice(0, 10));
+  const body = JSON.stringify({ counts: HITS, paths: pages });
+  HITS = {}; PAGES = {}; HIT_N = 0; SENT_AT = Date.now();
+  try {
+    await fetch(AIPAYGEN + "/v1/gateway/hits/" + ROUTE, { method: "POST", headers: { "content-type": "application/json", "x-aipaygen-gateway-secret": secret }, body, signal: AbortSignal.timeout(5000) });
+  } catch {}
+}
 app.use(async (req, res, next) => {
   if (process.env.AIPAYGEN_SECRET && req.get("x-aipaygen-gateway-secret") === process.env.AIPAYGEN_SECRET) return next();
-  const paying = req.get("payment-signature") || req.get("x-payment");
+  const send = async (r) => {
+    r.headers.forEach((v, k) => { if (!["content-encoding", "content-length", "transfer-encoding"].includes(k)) res.set(k, v); });
+    res.status(r.status).send(Buffer.from(await r.arrayBuffer()));
+  };
+  // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
+  if (req.get("payment-signature") || req.get("x-payment")) {
+    const headers = { ...req.headers }; delete headers.host;
+    return send(await fetch(GATEWAY + req.originalUrl, { method: "GET", headers }));
+  }
   // Behind a proxy or load balancer, set app.set("trust proxy", true) so req.ip is the visitor's address.
-  const bot = AI_BOTS.test(req.get("user-agent") || "") || (await isAiIp(req.ip || ""));
-  if (!bot && !paying) return next();
-  const headers = { ...req.headers }; delete headers.host;
-  const r = await fetch(GATEWAY + req.originalUrl, { method: "GET", headers });
-  r.headers.forEach((v, k) => { if (!["content-encoding", "content-length", "transfer-encoding"].includes(k)) res.set(k, v); });
-  res.status(r.status).send(Buffer.from(await r.arrayBuffer()));
+  const named = (req.get("user-agent") || "").match(AI_BOTS);
+  const bot = named ? named[0] : (await isAiIp(req.ip || "")) ? "AI crawler (by IP)" : null;
+  if (!bot) return next(); // people and search engines browse free
+  const quote = await aipaygen402(req.protocol + "://" + req.get("host") + req.originalUrl, bot, req.path);
+  aipaygenReport(process.env.AIPAYGEN_SECRET);
+  return quote ? send(quote) : next();
 });

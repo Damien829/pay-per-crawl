@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 2.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,9 @@ AI crawlers (GPTBot, ClaudeBot, PerplexityBot, CCBot, Bytespider and others) rea
 
 This plugin relies on the AIPayGen gateway, a third-party service at https://aipaygen.com, to quote prices and verify and settle payments.
 
-* **When it is used:** only for requests from known AI crawlers (by user agent, or by an address in the IP ranges AI crawler operators publish), or requests carrying an x402 payment header. Requests from people are never sent.
+* **When it is used:** only for requests carrying an x402 payment header (a crawler paying for a page). Unpaid AI crawlers are answered by the plugin itself. Requests from people are never sent.
+* **Price quote:** about once an hour the plugin downloads your route's price quote from https://aipaygen.com/v1/gateway/quote/<route>, so it can answer AI crawlers itself.
+* **AI crawler counts:** once an hour the plugin sends the number of AI crawler visits by crawler name and the 10 most-requested paths, with your gateway secret, so your report can show them. No visitor IP addresses, cookies or personal data are sent.
 * **Crawler address list:** once a day the plugin downloads the published AI crawler IP ranges from https://aipaygen.com/v1/ai_bot_ips. Nothing about your site or visitors is sent with that request.
 * **What is sent:** the requested path and query string, the crawler's user agent and accept headers, and any payment header, plus your route id.
 * **What the gateway does:** answers unpaid requests with your price; for paid requests it verifies the payment, fetches the page from your site (with your gateway secret, so the plugin lets it through), settles the payment to your wallet, and returns the page to the crawler.
@@ -57,6 +59,10 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.0.0 =
+* Unpaid AI crawlers get your price straight from your site; only paid requests go to AIPayGen. Faster for crawlers, and nothing depends on AIPayGen for ordinary visits.
+* New: your AI crawler report (which bots, how often, top pages, what they would have paid). The private link is on the settings page.
 
 = 1.3.0 =
 * Charges ElevenLabs' crawlers too (ElevenlabsCrawler, which collects training data, and ElevenlabsBot).
