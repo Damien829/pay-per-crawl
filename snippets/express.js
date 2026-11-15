@@ -67,7 +67,9 @@ app.use(async (req, res, next) => {
   };
   // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
   if (req.get("payment-signature") || req.get("x-payment")) {
-    const headers = { ...req.headers }; delete headers.host;
+    // Only what the gateway needs (Node's fetch rejects hop-by-hop headers like transfer-encoding).
+    const headers = {};
+    for (const h of ["payment-signature", "x-payment", "user-agent", "accept", "accept-language"]) if (req.get(h)) headers[h] = req.get(h);
     return send(await fetch(GATEWAY + req.originalUrl, { method: "GET", headers }));
   }
   // Behind a proxy or load balancer, set app.set("trust proxy", true) so req.ip is the visitor's address.
