@@ -32,7 +32,7 @@ async function isAiIp(ip) {
 
 // Answer AI crawlers here with your price; only paid retries go to AIPayGen.
 const [AIPAYGEN, ROUTE] = GATEWAY.split("/g/");
-let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = Date.now();
+let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = Date.now(), FAST = {}, FAST_N = 0;
 async function aipaygenQuote() {
   if (!QUOTE || Date.now() - QUOTE_AT > 36e5) {
     try {
@@ -58,13 +58,42 @@ async function aipaygen402(url, bot, path) {
 // Visit counts for your AI crawler report, sent every few minutes in one small request.
 async function aipaygenReport(secret) {
   const every = (QUOTE && QUOTE.report) || { every_seconds: 600, max_hits: 500 };
-  if (!secret || !HIT_N || (HIT_N < every.max_hits && Date.now() - SENT_AT < every.every_seconds * 1000)) return;
+  if (!secret || !(HIT_N + FAST_N) || (HIT_N < every.max_hits && Date.now() - SENT_AT < every.every_seconds * 1000)) return;
   const pages = Object.fromEntries(Object.entries(PAGES).sort((a, b) => b[1] - a[1]).slice(0, 10));
-  const body = JSON.stringify({ counts: HITS, paths: pages });
-  HITS = {}; PAGES = {}; HIT_N = 0; SENT_AT = Date.now();
+  const fast = Object.fromEntries(Object.entries(FAST).sort((a, b) => b[1].times - a[1].times).slice(0, 20));
+  const body = JSON.stringify(FAST_N ? { counts: HITS, paths: pages, fast } : { counts: HITS, paths: pages });
+  HITS = {}; PAGES = {}; HIT_N = 0; SENT_AT = Date.now(); FAST = {}; FAST_N = 0;
   try {
     await fetch(AIPAYGEN + "/v1/gateway/hits/" + ROUTE, { method: "POST", headers: { "content-type": "application/json", "x-aipaygen-gateway-secret": secret }, body, signal: AbortSignal.timeout(5000) });
   } catch {}
+}
+// Fast readers: a browser user agent asking for many pages a minute and no images or stylesheets,
+// the usual shape of a crawler in disguise. Only listed in your report (network /24 or /48 and user
+// agent), never charged. Nothing is sent for normal visitors. The limit comes from the quote.
+const SEEN = new Map(), ASSET = /\.(css|js|mjs|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|map)$/i;
+function aipaygenNet(ip) {
+  ip = String(ip || "").trim().replace(/^::ffff:(?=\d+\.)/i, "");
+  if (/^(10|127)\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\.|^(::1|f[cd]|fe80)/i.test(ip)) return null; // private: likely a proxy, not a visitor
+  if (ip.includes(".")) { const p = ip.split("."); return p.length === 4 ? p.slice(0, 3).join(".") + ".0/24" : null; }
+  const [h, t] = ip.split("::"), H = h ? h.split(":") : [], T = t ? t.split(":") : [];
+  const g = t === undefined ? H : [...H, ...Array(Math.max(0, 8 - H.length - T.length)).fill("0"), ...T];
+  return g.length === 8 && g.every((x) => /^[0-9a-f]{1,4}$/i.test(x)) ? g.slice(0, 3).map((x) => parseInt(x, 16).toString(16)).join(":") + "::/48" : null;
+}
+function aipaygenWatch(ip, path, ua, secret) {
+  const net = aipaygenNet(ip), flush = () => (FAST_N ? aipaygenReport(secret) : undefined);
+  if (!net) return flush();
+  const now = Date.now(), lim = (QUOTE && QUOTE.fast) || { pages: 60, seconds: 60 };
+  let s = SEEN.get(ip);
+  if (!s || now - s[0] > lim.seconds * 1000) {
+    if (SEEN.size >= 5000) SEEN.delete(SEEN.keys().next().value);
+    s = [now, 0, 0]; SEEN.delete(ip); SEEN.set(ip, s);
+  }
+  if (ASSET.test(path)) { s[2]++; return flush(); }
+  if (++s[1] < lim.pages || s[2]) return flush();
+  const f = FAST[net] || (FAST[net] = { pages: 0, times: 0, ua: String(ua || "").slice(0, 160) });
+  f.pages = Math.max(f.pages, s[1]);
+  if (s[1] === lim.pages) { f.times++; FAST_N++; }
+  return flush(); // sent with the next batch (every few minutes), never per visit
 }
 
 export async function middleware(req: NextRequest, ev: NextFetchEvent) {
@@ -77,7 +106,11 @@ export async function middleware(req: NextRequest, ev: NextFetchEvent) {
   const named = (req.headers.get("user-agent") || "").match(AI_BOTS);
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0];
   const bot = named ? named[0] : (await isAiIp(ip)) ? "AI crawler (by IP)" : null;
-  if (!bot) return NextResponse.next(); // people and search engines browse free
+  if (!bot) { // people and search engines browse free; very fast page-only readers are listed in your report
+    const w = aipaygenWatch(ip, req.nextUrl.pathname, req.headers.get("user-agent"), secret);
+    if (w) ev.waitUntil(w);
+    return NextResponse.next();
+  }
   const quote = await aipaygen402(req.url, bot, req.nextUrl.pathname);
   ev.waitUntil(aipaygenReport(secret));
   return quote || NextResponse.next();

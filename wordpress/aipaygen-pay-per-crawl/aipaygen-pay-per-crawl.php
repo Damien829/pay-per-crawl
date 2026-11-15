@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.1.0
+ * Version:           2.2.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -97,6 +97,7 @@ function aipaygen_ppc_maybe_charge() {
 	if ( '' === $sig && '' === $xpay ) {
 		$bot = preg_match( AIPAYGEN_PPC_BOTS, $ua, $m ) ? $m[0] : ( aipaygen_ppc_ai_ip( $ip ) ? 'AI crawler (by IP)' : '' );
 		if ( '' === $bot ) {
+			aipaygen_ppc_watch( $ip, (string) wp_parse_url( $path, PHP_URL_PATH ), $ua );
 			return; // People and search engines browse free.
 		}
 		// Unpaid AI crawler: answer with the price here; it never reaches AIPayGen.
@@ -201,12 +202,57 @@ function aipaygen_ppc_count( $bot, $path ) {
 	update_option( 'aipaygen_ppc_counts', $c, false );
 }
 
+/**
+ * Fast readers: a browser user agent asking for many pages a minute, often a crawler that doesn't
+ * say what it is. Only listed in the report (network /24 or /48 and user agent), never charged.
+ * Needs a persistent object cache (Redis, Memcached), so normal visits never write to the database.
+ */
+function aipaygen_ppc_watch( $ip, $path, $ua ) {
+	if ( ! wp_using_ext_object_cache() || preg_match( '/\.(css|js|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf)$/i', $path ) ) {
+		return;
+	}
+	$bin = @inet_pton( $ip ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	if ( false === $bin || ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+		return; // Private address: likely a proxy, not a visitor.
+	}
+	if ( 4 === strlen( $bin ) ) {
+		$net = implode( '.', array_slice( explode( '.', inet_ntop( $bin ) ), 0, 3 ) ) . '.0/24';
+	} else {
+		$g   = unpack( 'n3', substr( $bin, 0, 6 ) );
+		$net = dechex( $g[1] ) . ':' . dechex( $g[2] ) . ':' . dechex( $g[3] ) . '::/48';
+	}
+	$q     = aipaygen_ppc_quote( (string) get_option( 'aipaygen_ppc_route', '' ) );
+	$limit = is_array( $q ) && isset( $q['fast']['pages'], $q['fast']['seconds'] ) ? $q['fast'] : array( 'pages' => 60, 'seconds' => 60 );
+	$key   = 'w' . md5( $ip );
+	$n     = wp_cache_incr( $key, 1, 'aipaygen_ppc' );
+	if ( false === $n ) {
+		wp_cache_set( $key, 1, 'aipaygen_ppc', (int) $limit['seconds'] );
+		return;
+	}
+	if ( (int) $n !== (int) $limit['pages'] ) {
+		return; // Under the limit, or already flagged in this window.
+	}
+	$c = get_option( 'aipaygen_ppc_counts', array() );
+	if ( ! is_array( $c ) ) {
+		$c = array();
+	}
+	if ( isset( $c['fast'][ $net ] ) || count( isset( $c['fast'] ) ? $c['fast'] : array() ) < 20 ) {
+		$f                 = isset( $c['fast'][ $net ] ) ? $c['fast'][ $net ] : array( 'pages' => 0, 'times' => 0 );
+		$c['fast'][ $net ] = array(
+			'pages' => max( (int) $f['pages'], (int) $n ),
+			'times' => (int) $f['times'] + 1,
+			'ua'    => substr( $ua, 0, 160 ),
+		);
+		update_option( 'aipaygen_ppc_counts', $c, false );
+	}
+}
+
 /** Send the stored counts to AIPayGen (hourly, by WP-Cron) and clear them once accepted. */
 function aipaygen_ppc_send_counts() {
 	$route  = (string) get_option( 'aipaygen_ppc_route', '' );
 	$secret = (string) get_option( 'aipaygen_ppc_secret', '' );
 	$c      = get_option( 'aipaygen_ppc_counts', array() );
-	if ( '' === $route || '' === $secret || ! is_array( $c ) || empty( $c['bots'] ) ) {
+	if ( '' === $route || '' === $secret || ! is_array( $c ) || ( empty( $c['bots'] ) && empty( $c['fast'] ) ) ) {
 		return;
 	}
 	$paths = isset( $c['paths'] ) && is_array( $c['paths'] ) ? $c['paths'] : array();
@@ -221,8 +267,9 @@ function aipaygen_ppc_send_counts() {
 			),
 			'body'    => wp_json_encode(
 				array(
-					'counts' => $c['bots'],
+					'counts' => (object) ( isset( $c['bots'] ) ? $c['bots'] : array() ),
 					'paths'  => (object) array_slice( $paths, 0, 10, true ),
+					'fast'   => (object) ( isset( $c['fast'] ) ? $c['fast'] : array() ),
 				)
 			),
 		)

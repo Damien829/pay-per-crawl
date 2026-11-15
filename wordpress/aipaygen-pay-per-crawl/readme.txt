@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,6 +26,7 @@ This plugin relies on the AIPayGen gateway, a third-party service at https://aip
 * **When it is used:** only for requests carrying an x402 payment header (a crawler paying for a page). Unpaid AI crawlers are answered by the plugin itself. Requests from people are never sent.
 * **Price quote:** about once an hour the plugin downloads your route's price quote from https://aipaygen.com/v1/gateway/quote/<route>, so it can answer AI crawlers itself.
 * **AI crawler counts:** once an hour the plugin sends the number of AI crawler visits by crawler name and the 10 most-requested paths, with your gateway secret, so your report can show them. No visitor IP addresses, cookies or personal data are sent.
+* **Fast readers (only with a persistent object cache):** when one address asks for 60 or more pages in a minute while sending a browser user agent, the hourly report also includes its network range (the first three parts of the address, e.g. 203.0.113.0/24, never the full address), the user agent and the page rate. Nothing is charged or blocked; it is listed in your report for you to judge. Other visitors are never sent.
 * **Crawler address list:** once a day the plugin downloads the published AI crawler IP ranges from https://aipaygen.com/v1/ai_bot_ips. Nothing about your site or visitors is sent with that request.
 * **What is sent:** the requested path and query string, the crawler's user agent and accept headers, and any payment header, plus your route id.
 * **What the gateway does:** answers unpaid requests with your price; for paid requests it verifies the payment, fetches the page from your site (with your gateway secret, so the plugin lets it through), settles the payment to your wallet, and returns the page to the crawler.
@@ -59,6 +60,9 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.2.0 =
+* Lists fast readers in your report: a browser user agent asking for 60+ pages a minute, often a crawler that hides its name. Report only, never charged. Needs a persistent object cache.
 
 = 2.1.0 =
 * Follows your route's bot rules: in "training" mode, AI search and assistant fetchers (OAI-SearchBot, ChatGPT-User, PerplexityBot...) read free and only training crawlers are charged.
