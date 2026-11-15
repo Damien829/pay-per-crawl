@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,8 @@ AI crawlers (GPTBot, ClaudeBot, PerplexityBot, CCBot, Bytespider and others) rea
 
 This plugin relies on the AIPayGen gateway, a third-party service at https://aipaygen.com, to quote prices and verify and settle payments.
 
-* **When it is used:** only for requests from known AI crawlers, or requests carrying an x402 payment header. Requests from people are never sent.
+* **When it is used:** only for requests from known AI crawlers (by user agent, or by an address in the IP ranges AI crawler operators publish), or requests carrying an x402 payment header. Requests from people are never sent.
+* **Crawler address list:** once a day the plugin downloads the published AI crawler IP ranges from https://aipaygen.com/v1/ai_bot_ips. Nothing about your site or visitors is sent with that request.
 * **What is sent:** the requested path and query string, the crawler's user agent and accept headers, and any payment header, plus your route id.
 * **What the gateway does:** answers unpaid requests with your price; for paid requests it verifies the payment, fetches the page from your site (with your gateway secret, so the plugin lets it through), settles the payment to your wallet, and returns the page to the crawler.
 
@@ -53,9 +54,12 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 
 = What if a crawler pretends to be a browser? =
 
-It gets the page for free, the same as with robots.txt. The plugin targets crawlers that identify themselves.
+If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 1.2.0 =
+* Catches AI crawlers that hide their name, using the IP ranges OpenAI, Perplexity, DuckDuckGo and Common Crawl publish (refreshed daily).
 
 = 1.1.0 =
 * WordPress.org release: prefixed settings, sanitized input, translations ready, uninstall cleanup, logged-in users always skipped.

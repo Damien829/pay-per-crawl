@@ -6,7 +6,7 @@ It uses [x402](https://aipaygen.com/x402), the open protocol for paying over HTT
 
 ## How it works
 
-1. A request from a known AI crawler (or one already carrying an x402 payment) is passed to the AIPayGen gateway on the same path.
+1. A request from a known AI crawler is passed to the AIPayGen gateway on the same path. Crawlers are recognized by user agent, and by address: requests from the IP ranges OpenAI, Perplexity, DuckDuckGo and Common Crawl publish are charged even when they claim to be a browser (list refreshed daily from https://aipaygen.com/v1/ai_bot_ips). Requests already carrying an x402 payment go to the gateway too.
 2. Unpaid, the gateway answers `402` with your price and your wallet address.
 3. Paid, the gateway verifies the payment, fetches the page from your site with a secret header (which these snippets let through), settles the payment to your wallet and returns the page.
 4. Everyone else is served by your site as usual. If your site errors, nobody is charged. Agents without a wallet can still pay through the gateway's `paid_fetch` tool.
@@ -44,7 +44,8 @@ Which ones does your site block today? Free check: https://aipaygen.com/ai-crawl
 
 ## Honest limits
 
-- A crawler that pretends to be a browser gets the free page, same as with `robots.txt`.
+- Crawlers from operators that publish no IP list (ClaudeBot, Bytespider and others) are recognized by name only, so one that pretends to be a browser gets the free page, same as with `robots.txt`. The Apache snippet matches by name only.
+- Check any request yourself with the free `verify_bot` tool: `curl "https://aipaygen.com/v1/verify_bot?ip=1.2.3.4&user_agent=GPTBot"` says verified, fake, disguised or unverifiable.
 - Most crawlers can't pay yet; today this works like a block with a price tag. x402 support in agent frameworks is growing.
 - You need a wallet on Base to receive USDC.
 

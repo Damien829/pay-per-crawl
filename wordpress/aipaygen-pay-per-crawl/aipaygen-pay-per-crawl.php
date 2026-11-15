@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -29,6 +29,49 @@ function aipaygen_ppc_header( $name ) {
 	return isset( $_SERVER[ $key ] ) ? sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) ) : '';
 }
 
+/**
+ * Is this address in a range an AI crawler operator publishes (OpenAI, Perplexity, DuckDuckGo,
+ * Common Crawl)? Catches crawlers that send a browser user agent. The list is cached for a day;
+ * if it can't be fetched, nobody is charged by address.
+ */
+function aipaygen_ppc_ai_ip( $ip ) {
+	if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+		return false;
+	}
+	$list = get_transient( 'aipaygen_ppc_ai_ips' );
+	if ( false === $list ) {
+		$res  = wp_remote_get( AIPAYGEN_PPC_GATEWAY . '/v1/ai_bot_ips?format=text', array( 'timeout' => 5 ) );
+		$body = is_wp_error( $res ) ? '' : (string) wp_remote_retrieve_body( $res );
+		$list = array_values( array_filter( array_map( 'trim', explode( "\n", $body ) ) ) );
+		set_transient( 'aipaygen_ppc_ai_ips', $list, $list ? DAY_IN_SECONDS : 15 * MINUTE_IN_SECONDS );
+	}
+	$bin = inet_pton( $ip );
+	foreach ( (array) $list as $cidr ) {
+		$parts = explode( '/', (string) $cidr );
+		if ( ! filter_var( $parts[0], FILTER_VALIDATE_IP ) ) {
+			continue;
+		}
+		$net = inet_pton( $parts[0] );
+		if ( strlen( $net ) !== strlen( $bin ) ) {
+			continue;
+		}
+		$bits  = isset( $parts[1] ) ? max( 0, min( strlen( $net ) * 8, (int) $parts[1] ) ) : strlen( $net ) * 8;
+		$bytes = intdiv( $bits, 8 );
+		if ( substr( $net, 0, $bytes ) !== substr( $bin, 0, $bytes ) ) {
+			continue;
+		}
+		$rem = $bits % 8;
+		if ( 0 === $rem ) {
+			return true;
+		}
+		$mask = chr( ( 0xff << ( 8 - $rem ) ) & 0xff );
+		if ( ( $net[ $bytes ] & $mask ) === ( $bin[ $bytes ] & $mask ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
 /** Send AI crawlers (and requests already carrying an x402 payment) to the gateway; everyone else is untouched. */
 function aipaygen_ppc_maybe_charge() {
 	if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || is_user_logged_in() ) {
@@ -46,7 +89,8 @@ function aipaygen_ppc_maybe_charge() {
 	$ua   = aipaygen_ppc_header( 'user-agent' );
 	$sig  = aipaygen_ppc_header( 'payment-signature' );
 	$xpay = aipaygen_ppc_header( 'x-payment' );
-	if ( ! preg_match( AIPAYGEN_PPC_BOTS, $ua ) && '' === $sig && '' === $xpay ) {
+	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+	if ( ! preg_match( AIPAYGEN_PPC_BOTS, $ua ) && '' === $sig && '' === $xpay && ! aipaygen_ppc_ai_ip( $ip ) ) {
 		return; // People and search engines browse free.
 	}
 
@@ -152,5 +196,6 @@ function aipaygen_ppc_settings_page() {
 function aipaygen_ppc_uninstall() {
 	delete_option( 'aipaygen_ppc_route' );
 	delete_option( 'aipaygen_ppc_secret' );
+	delete_transient( 'aipaygen_ppc_ai_ips' );
 }
 register_uninstall_hook( __FILE__, 'aipaygen_ppc_uninstall' );
