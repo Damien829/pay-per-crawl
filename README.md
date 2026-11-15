@@ -6,6 +6,8 @@ It uses [x402](https://aipaygen.com/x402), the open protocol for paying over HTT
 
 **Live demo (on Vercel, not Cloudflare):** https://aipaygen-ppc-demo.vercel.app. Open it in a browser and you get the page; `curl -i -A GPTBot https://aipaygen-ppc-demo.vercel.app/` gets `402` with the price. Pay it with any x402 client and you get the page. How this compares to Cloudflare Pay Per Crawl: https://aipaygen.com/compare/cloudflare
 
+**Not ready to charge? Start with the free report.** Sign up at https://aipaygen.com/pay-per-crawl#signup without a wallet ("None yet"), install the snippet or WordPress plugin, and every page is still served to everyone while you see which AI crawlers visit, which pages they take, and what they would have paid. Add a wallet later with one API call and charging turns on within the hour, no reinstall.
+
 ## How it works
 
 1. A request from a known AI crawler (by user agent, or from the IP ranges OpenAI, Perplexity, DuckDuckGo and Common Crawl publish; list refreshed daily from https://aipaygen.com/v1/ai_bot_ips) gets `402 Payment Required` with your price, **answered by your own server** from a quote it fetches about once an hour. Unpaid crawler visits never leave your site.

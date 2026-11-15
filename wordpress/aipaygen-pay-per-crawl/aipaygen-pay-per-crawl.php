@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.2.0
+ * Version:           2.3.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -151,7 +151,8 @@ function aipaygen_ppc_quote( $route ) {
 	}
 	$res = wp_remote_get( AIPAYGEN_PPC_GATEWAY . '/v1/gateway/quote/' . $route, array( 'timeout' => 5 ) );
 	$q   = is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ? null : json_decode( (string) wp_remote_retrieve_body( $res ), true );
-	if ( ! is_array( $q ) || empty( $q['accepts'] ) ) {
+	// Report-only routes (charge_mode off) have no price: cache them too, so pages are served without a lookup.
+	if ( ! is_array( $q ) || ( empty( $q['accepts'] ) && ( ! isset( $q['charge_mode'] ) || 'off' !== $q['charge_mode'] ) ) ) {
 		return false;
 	}
 	$q['route'] = $route;
@@ -162,8 +163,8 @@ function aipaygen_ppc_quote( $route ) {
 /** Answer an unpaid AI crawler with HTTP 402 and the route's price, then stop. Returns (page served) if no quote or the bot is let in free. */
 function aipaygen_ppc_local_402( $route, $url, $bot = '' ) {
 	$q = aipaygen_ppc_quote( $route );
-	if ( ! $q ) {
-		return;
+	if ( ! $q || ( isset( $q['charge_mode'] ) && 'off' === $q['charge_mode'] ) ) {
+		return; // No quote, or report only: serve the page (the visit is already counted).
 	}
 	// Bots this site lets in free (its route's settings, e.g. AI search in "training" mode).
 	foreach ( ( isset( $q['free_bots'] ) && is_array( $q['free_bots'] ) ) ? $q['free_bots'] : array() as $free ) {
