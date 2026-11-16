@@ -20,19 +20,21 @@ Agents without a wallet can still pay through the gateway's `paid_fetch` tool. N
 
 ## Setup
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker)
+
 1. Create a free route at **https://aipaygen.com/pay-per-crawl** (your site, a price per page, your wallet on Base). You get a route id and a gateway secret.
 2. Install the piece for your platform:
 
 | Platform | File |
 |---|---|
 | WordPress | [`wordpress/aipaygen-pay-per-crawl`](wordpress/aipaygen-pay-per-crawl) (zip the folder and upload it, or [download the zip](https://aipaygen.com/downloads/aipaygen-pay-per-crawl.zip)) |
-| Cloudflare | [`snippets/cloudflare-worker.js`](snippets/cloudflare-worker.js) |
+| Cloudflare | One click: [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker) ([`cloudflare-worker/`](cloudflare-worker)), or paste [`snippets/cloudflare-worker.js`](snippets/cloudflare-worker.js) |
 | Nginx | [`snippets/nginx.conf`](snippets/nginx.conf) |
 | Apache | [`snippets/apache.conf`](snippets/apache.conf) |
 | Next.js / Vercel | [`snippets/nextjs-middleware.ts`](snippets/nextjs-middleware.ts) |
 | Express / Node | [`snippets/express.js`](snippets/express.js) |
 
-Replace `YOUR_ROUTE_ID` with your route id and set your gateway secret where the snippet says. Step-by-step guides: https://aipaygen.com/pay-per-crawl/setup/nginx (and `/wordpress`, `/cloudflare`, `/apache`, `/nextjs`, `/express`).
+On Cloudflare, the one-click Worker asks for your route id and gateway secret while deploying; then add a route for your site (Workers > aipaygen-pay-per-crawl > Settings > Domains & Routes: `example.com/*`). For the snippets, replace `YOUR_ROUTE_ID` with your route id and set your gateway secret where the snippet says. Step-by-step guides: https://aipaygen.com/pay-per-crawl/setup/nginx (and `/wordpress`, `/cloudflare`, `/apache`, `/nextjs`, `/express`).
 
 3. Check it:
 

@@ -1,0 +1,12 @@
+{
+  // One-click pay-per-crawl Worker. After deploying, add a route for your site
+  // (Workers > aipaygen-pay-per-crawl > Settings > Domains & Routes: example.com/*).
+  "name": "aipaygen-pay-per-crawl",
+  "main": "src/index.js",
+  "compatibility_date": "2025-09-01",
+  "workers_dev": false,
+  "vars": {
+    // Your route id from https://aipaygen.com/pay-per-crawl#signup (12 characters).
+    "AIPAYGEN_ROUTE": ""
+  }
+}

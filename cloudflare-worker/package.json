@@ -1,0 +1,7 @@
+{
+  "name": "aipaygen-pay-per-crawl",
+  "private": true,
+  "description": "Charge AI crawlers per page with x402 (AIPayGen). People and search engines browse free.",
+  "scripts": { "deploy": "wrangler deploy", "dev": "wrangler dev" },
+  "devDependencies": { "wrangler": "^4.0.0" }
+}
