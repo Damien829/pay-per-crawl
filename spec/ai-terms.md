@@ -2,7 +2,7 @@
 
 **Status:** draft for comment, November 2026. Reference implementation: [AIPayGen](https://aipaygen.com/ai-terms). License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-AI Terms is one machine-readable file in which a website states, **per use**, what AI systems may do with its pages: read free, read for a price, or stay out. It adds what robots.txt cannot express: the purpose of the access, a price and how to pay it, how identity is checked, and a receipt for every paid read.
+AI Terms is a file a website publishes at /.well-known/ai-terms that says, for each use of its content by AI (search, answer, training, agent), whether that use is allowed, allowed for a price, or not allowed. ([Plain definition](https://aipaygen.com/what-is-ai-terms).) It adds what robots.txt cannot express: the purpose of the access, a price and how to pay it, how identity is checked, and a receipt for every paid read.
 
 ## 1. Why
 
