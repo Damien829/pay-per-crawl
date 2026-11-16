@@ -37,6 +37,7 @@ Agents without a wallet can still pay through the gateway's `paid_fetch` tool. N
 | Apache | [`snippets/apache.conf`](snippets/apache.conf) |
 | Next.js / Vercel | [`snippets/nextjs-middleware.ts`](snippets/nextjs-middleware.ts) |
 | Express / Node | [`snippets/express.js`](snippets/express.js) |
+| Django / Python | [`snippets/django_middleware.py`](snippets/django_middleware.py) (stdlib only; set `AIPAYGEN_ROUTE` and `AIPAYGEN_SECRET`) |
 
 On Cloudflare, the one-click Worker deploys in a minute; then set `AIPAYGEN_ROUTE` (your route id) and the secret `AIPAYGEN_SECRET` under Settings > Variables and Secrets if it did not ask for them, and add a route for your site (Workers > aipaygen-pay-per-crawl > Settings > Domains & Routes: `example.com/*`). For the snippets, replace `YOUR_ROUTE_ID` with your route id and set your gateway secret where the snippet says. Step-by-step guides: https://aipaygen.com/pay-per-crawl/setup/nginx (and `/wordpress`, `/cloudflare`, `/apache`, `/nextjs`, `/express`).
 
