@@ -1,4 +1,4 @@
-// Pay-per-crawl via AIPayGen, as a one-click Cloudflare Worker. Settings (asked for when you deploy):
+// Pay-per-crawl via AIPayGen, as a one-click Cloudflare Worker. Settings (Workers > this worker > Settings > Variables and Secrets):
 //   AIPAYGEN_ROUTE   your route id from https://aipaygen.com/pay-per-crawl#signup
 //   AIPAYGEN_SECRET  the gateway_secret you got with it (a secret, never shown again)
 // Then add a route for your site (Workers > your worker > Settings > Domains & Routes: example.com/*).
