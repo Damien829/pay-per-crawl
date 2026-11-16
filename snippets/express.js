@@ -28,6 +28,14 @@ async function isAiIp(ip) {
 // Answer AI crawlers here with your price; only paid retries go to AIPayGen.
 const [AIPAYGEN, ROUTE] = GATEWAY.split("/g/");
 let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = Date.now(), FAST = {}, FAST_N = 0;
+// This site's AI Terms (what AI may do with its pages, per use; aipaygen.com/ai-terms), served at /.well-known/ai-terms.
+async function aipaygenTerms() {
+  try {
+    const r = await fetch(AIPAYGEN + "/v1/gateway/terms/" + ROUTE, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) return new Response(await r.text(), { headers: { "content-type": "application/json", "cache-control": "public, max-age=900", "access-control-allow-origin": "*" } });
+  } catch {}
+  return null;
+}
 async function aipaygenQuote() {
   if (!QUOTE || Date.now() - QUOTE_AT > 36e5) {
     try {
@@ -96,6 +104,7 @@ app.use(async (req, res, next) => {
     r.headers.forEach((v, k) => { if (!["content-encoding", "content-length", "transfer-encoding"].includes(k)) res.set(k, v); });
     res.status(r.status).send(Buffer.from(await r.arrayBuffer()));
   };
+  if (req.path === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return send(t); }
   // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
   if (req.get("payment-signature") || req.get("x-payment")) {
     // Only what the gateway needs (Node's fetch rejects hop-by-hop headers like transfer-encoding).

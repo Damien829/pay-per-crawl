@@ -90,6 +90,15 @@ class AIPayGenMiddleware:
         from django.http import HttpResponse
         secret = os.environ.get("AIPAYGEN_SECRET", "")
         h = request.headers
+        # This site's AI Terms (per-use terms for AI, aipaygen.com/ai-terms), served at /.well-known/ai-terms.
+        if request.path == "/.well-known/ai-terms":
+            try:
+                resp = HttpResponse(_get(AIPAYGEN + "/v1/gateway/terms/" + ROUTE), content_type="application/json")
+                resp["cache-control"] = "public, max-age=900"
+                resp["access-control-allow-origin"] = "*"
+                return resp
+            except Exception:
+                return self.get_response(request)
         # The gateway fetching a page it was paid for: serve it.
         if secret and h.get("x-aipaygen-gateway-secret") == secret:
             return self.get_response(request)
