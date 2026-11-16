@@ -108,6 +108,8 @@ export async function middleware(req: NextRequest, ev: NextFetchEvent) {
   const secret = process.env.AIPAYGEN_SECRET;
   if (secret && req.headers.get("x-aipaygen-gateway-secret") === secret) return NextResponse.next();
   if (req.nextUrl.pathname === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return t; }
+  // robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+  if (req.nextUrl.pathname === "/robots.txt") return NextResponse.next();
   // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
   if (req.headers.get("payment-signature") || req.headers.get("x-payment")) {
     return NextResponse.rewrite(new URL(GATEWAY + req.nextUrl.pathname + req.nextUrl.search));

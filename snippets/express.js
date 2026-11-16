@@ -105,6 +105,8 @@ app.use(async (req, res, next) => {
     res.status(r.status).send(Buffer.from(await r.arrayBuffer()));
   };
   if (req.path === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return send(t); }
+  // robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+  if (req.path === "/robots.txt") return next();
   // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
   if (req.get("payment-signature") || req.get("x-payment")) {
     // Only what the gateway needs (Node's fetch rejects hop-by-hop headers like transfer-encoding).

@@ -20,6 +20,7 @@ AI Terms fills those gaps and leaves robots.txt in place.
 - The file lives at `/.well-known/ai-terms` on the site's origin, served as `application/json` (UTF-8).
 - A site MAY also point to it from any response with `Link: <url>; rel="ai-terms"`, and SHOULD do so on HTTP 402 answers. The URL may be off-site (for example a provider that generates terms from the site's settings).
 - A site MAY add `AI-Terms: <url>` to robots.txt. RFC 9309 allows records beyond its own; crawlers that don't read this one are unaffected.
+- A site SHOULD keep the terms file and `/robots.txt` free to fetch for every client, whatever its terms for other paths. They are how a client learns the rules and the price; a client that is refused `/robots.txt` may treat the site as having no rules at all (RFC 9309, section 2.3.1.3).
 
 ## 3. Uses
 

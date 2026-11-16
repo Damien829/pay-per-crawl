@@ -13,8 +13,10 @@
 
 	# AI crawlers, and clients that already carry a payment, go through the gateway.
 	# The gateway's own fetch of a page it was paid for carries your secret and is served normally.
+	# robots.txt is free for every crawler: it is how they learn your rules and find your terms.
 	@aipaygen_ai {
 		not header X-AIPayGen-Gateway-Secret YOUR_GATEWAY_SECRET
+		not path /robots.txt
 		expression `header_regexp('User-Agent', '(?i)(GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-User|Claude-SearchBot|anthropic-ai|PerplexityBot|Perplexity-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta-externalagent|FacebookBot|cohere-ai|Diffbot|YouBot|MistralAI-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot)') || header({'Payment-Signature': '*'}) || header({'X-Payment': '*'})`
 	}
 	handle @aipaygen_ai {

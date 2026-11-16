@@ -102,6 +102,9 @@ class AIPayGenMiddleware:
         # The gateway fetching a page it was paid for: serve it.
         if secret and h.get("x-aipaygen-gateway-secret") == secret:
             return self.get_response(request)
+        # robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+        if request.path == "/robots.txt":
+            return self.get_response(request)
         # A crawler retrying with a payment: AIPayGen verifies it, fetches the page and pays your wallet.
         if h.get("payment-signature") or h.get("x-payment"):
             fwd = {k: h[k] for k in ("payment-signature", "x-payment", "user-agent", "accept", "accept-language") if h.get(k)}

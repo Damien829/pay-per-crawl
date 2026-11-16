@@ -104,6 +104,8 @@ export default {
     if (env.AIPAYGEN_SECRET && req.headers.get("x-aipaygen-gateway-secret") === env.AIPAYGEN_SECRET) return fetch(req);
     const u = new URL(req.url);
     if (u.pathname === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return t; }
+    // robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+    if (u.pathname === "/robots.txt") return fetch(req);
     // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
     if (req.headers.get("payment-signature") || req.headers.get("x-payment")) {
       return fetch(GATEWAY + u.pathname + u.search, { method: req.method, headers: req.headers, body: req.body });
