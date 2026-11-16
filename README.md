@@ -22,6 +22,8 @@ Agents without a wallet can still pay through the gateway's `paid_fetch` tool. N
 
 [`spec/ai-terms.md`](spec/ai-terms.md) is an open format for telling AI what it may do with your pages **per use** (search, answer, training, agent: allow, paid or deny), with prices, identity checks, an `AI-Purpose` header and receipts for paid reads. Every pay-per-crawl route gets its terms generated from its settings at `https://aipaygen.com/v1/gateway/terms/<your-route-id>`. Readable version: https://aipaygen.com/ai-terms. Comments and pull requests welcome.
 
+For implementers: a [JSON Schema](spec/ai-terms.schema.json), [test vectors](spec/ai-terms-vectors.json) for validation and path matching, a [validator](https://aipaygen.com/ai-terms#validate) and a no-account [file generator](https://aipaygen.com/ai-terms#make). The format is also an IETF Internet-Draft: [draft-ovalles-ai-terms](https://datatracker.ietf.org/doc/draft-ovalles-ai-terms/).
+
 ## Setup
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker)

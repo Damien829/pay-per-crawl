@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aipaygen.com/ai-terms/schema.json",
+  "title": "AI Terms 0.1",
+  "type": "object",
+  "required": [
+    "ai_terms",
+    "site",
+    "updated",
+    "uses",
+    "default"
+  ],
+  "properties": {
+    "ai_terms": {
+      "type": "string",
+      "description": "Version of the spec the file follows."
+    },
+    "site": {
+      "type": "string",
+      "format": "uri",
+      "description": "The origin the terms apply to."
+    },
+    "updated": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "uses": {
+      "type": "object",
+      "required": [
+        "search",
+        "answer",
+        "training",
+        "agent"
+      ],
+      "properties": {
+        "search": {
+          "$ref": "#/$defs/use"
+        },
+        "answer": {
+          "$ref": "#/$defs/use"
+        },
+        "training": {
+          "$ref": "#/$defs/use"
+        },
+        "agent": {
+          "$ref": "#/$defs/use"
+        }
+      }
+    },
+    "default": {
+      "enum": [
+        "allow",
+        "paid",
+        "deny"
+      ]
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "match",
+          "uses"
+        ],
+        "properties": {
+          "match": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "uses": {
+            "type": "object",
+            "minProperties": 1,
+            "properties": {
+              "search": {
+                "$ref": "#/$defs/use"
+              },
+              "answer": {
+                "$ref": "#/$defs/use"
+              },
+              "training": {
+                "$ref": "#/$defs/use"
+              },
+              "agent": {
+                "$ref": "#/$defs/use"
+              }
+            }
+          },
+          "payment": {
+            "$ref": "#/$defs/payment"
+          }
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "properties": {
+        "verify": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unverified": {
+          "type": "string"
+        }
+      }
+    },
+    "purpose_header": {
+      "const": "AI-Purpose"
+    },
+    "payment": {
+      "$ref": "#/$defs/payment"
+    },
+    "receipts": {
+      "type": "string"
+    },
+    "report_only": {
+      "type": "boolean"
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "licensing": {
+          "type": "string"
+        }
+      }
+    },
+    "spec": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "use": {
+      "type": "object",
+      "required": [
+        "access"
+      ],
+      "properties": {
+        "access": {
+          "enum": [
+            "allow",
+            "paid",
+            "deny"
+          ]
+        },
+        "price": {
+          "type": "object",
+          "required": [
+            "amount",
+            "currency",
+            "per"
+          ],
+          "properties": {
+            "amount": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$"
+            },
+            "currency": {
+              "const": "USD"
+            },
+            "per": {
+              "enum": [
+                "page",
+                "request"
+              ]
+            }
+          }
+        },
+        "attribution": {
+          "enum": [
+            "required",
+            "requested",
+            "none"
+          ]
+        }
+      }
+    },
+    "payment": {
+      "type": "object",
+      "required": [
+        "protocol",
+        "endpoint"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "x402"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "asset": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

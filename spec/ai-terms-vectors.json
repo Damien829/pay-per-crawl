@@ -1,0 +1,120 @@
+{
+  "about": "Test vectors for AI Terms 0.1 (https://aipaygen.com/ai-terms). An implementation that reads terms files should agree with every case. 'validate' cases say whether a file is valid; 'resolve' cases say which access applies to a use on a path. License: CC BY 4.0.",
+  "version": "0.1",
+  "validate": [
+    {
+      "name": "minimal file, everything allowed",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } } }
+    },
+    {
+      "name": "deny training, allow the rest with attribution; no payment needed",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "deny",
+        "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "requested" }, "training": { "access": "deny" }, "agent": { "access": "deny" } } }
+    },
+    {
+      "name": "paid training with a price and a payment endpoint",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "paid",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" },
+          "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } },
+          "agent": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } } },
+        "payment": { "protocol": "x402", "version": 2, "endpoint": "https://pay.example.com/x", "network": "eip155:8453", "asset": "USDC" } }
+    },
+    {
+      "name": "paid only under one path, with the payment on that path entry",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } },
+        "paths": [ { "match": "/data/*", "uses": { "agent": { "access": "paid", "price": { "amount": "0.01", "currency": "USD", "per": "request" } } },
+          "payment": { "protocol": "x402", "endpoint": "the URL itself" } } ] }
+    },
+    {
+      "name": "not an object",
+      "valid": false, "error_contains": "JSON object",
+      "doc": ["ai_terms"]
+    },
+    {
+      "name": "a use is missing",
+      "valid": false, "error_contains": "uses.agent",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" } } }
+    },
+    {
+      "name": "unknown access value",
+      "valid": false, "error_contains": "uses.training.access",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "license" }, "agent": { "access": "allow" } } }
+    },
+    {
+      "name": "paid without a price",
+      "valid": false, "error_contains": "no \"price\"",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "paid" }, "agent": { "access": "allow" } },
+        "payment": { "protocol": "x402", "endpoint": "https://pay.example.com/x" } }
+    },
+    {
+      "name": "price amount is a number, not a decimal string",
+      "valid": false, "error_contains": "decimal string",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" },
+          "training": { "access": "paid", "price": { "amount": 0.002, "currency": "USD", "per": "page" } }, "agent": { "access": "allow" } },
+        "payment": { "protocol": "x402", "endpoint": "https://pay.example.com/x" } }
+    },
+    {
+      "name": "paid with no way to pay",
+      "valid": false, "error_contains": "no way to pay",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" },
+          "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } }, "agent": { "access": "allow" } } }
+    },
+    {
+      "name": "default is paid with no way to pay",
+      "valid": false, "error_contains": "no way to pay",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "paid",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "deny" }, "agent": { "access": "deny" } } }
+    },
+    {
+      "name": "date in the wrong shape",
+      "valid": false, "error_contains": "YYYY-MM-DD",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "16/11/2026", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } } }
+    },
+    {
+      "name": "path match that does not start with a slash",
+      "valid": false, "error_contains": "paths[0].match",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } },
+        "paths": [ { "match": "members/*", "uses": { "search": { "access": "deny" } } } ] }
+    }
+  ],
+  "resolve": {
+    "terms": {
+      "default": "deny",
+      "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "deny" } },
+      "paths": [
+        { "match": "/blog/*", "uses": { "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } } } },
+        { "match": "/blog/drafts/*", "uses": { "search": { "access": "deny" }, "training": { "access": "deny" } } },
+        { "match": "/blog/draft-*", "uses": { "training": { "access": "deny" } } },
+        { "match": "/members/*", "uses": { "search": { "access": "deny" }, "answer": { "access": "deny" } } },
+        { "match": "/api/*/status", "uses": { "agent": { "access": "allow" } } }
+      ]
+    },
+    "cases": [
+      { "name": "no path entry matches: the top-level use applies", "use": "search", "path": "/about", "access": "allow" },
+      { "name": "a use missing from 'uses' falls back to 'default'", "use": "agent", "path": "/about", "access": "deny" },
+      { "name": "a path entry overrides only the uses it lists", "use": "search", "path": "/blog/post", "access": "allow" },
+      { "name": "a path entry overrides a listed use", "use": "training", "path": "/blog/post", "access": "paid" },
+      { "name": "* stays within one path segment", "use": "training", "path": "/blog/2026/post", "access": "deny" },
+      { "name": "two entries match: the most specific wins (most literal characters)", "use": "training", "path": "/blog/draft-1", "access": "deny" },
+      { "name": "a deeper entry applies to deeper paths", "use": "training", "path": "/blog/drafts/x", "access": "deny" },
+      { "name": "the more specific entry also wins for search", "use": "search", "path": "/blog/drafts/x", "access": "deny" },
+      { "name": "members area denies answers", "use": "answer", "path": "/members/profile", "access": "deny" },
+      { "name": "* in the middle of a pattern", "use": "agent", "path": "/api/v2/status", "access": "allow" },
+      { "name": "a pattern must match the whole path", "use": "agent", "path": "/api/v2/status/extra", "access": "deny" },
+      { "name": "the bare prefix does not match prefix/*", "use": "training", "path": "/blog", "access": "deny" }
+    ]
+  }
+}

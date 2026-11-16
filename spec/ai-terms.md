@@ -129,4 +129,11 @@ A paid response carries the x402 `PAYMENT-RESPONSE` header (the settled transact
 
 AIPayGen generates terms for every site from its settings (`/v1/gateway/terms/<route>`), publishes its own at <https://aipaygen.com/.well-known/ai-terms>, sends `Link: rel="ai-terms"` on its 402 answers, verifies identity against published IP ranges, settles with x402 and echoes `AI-Purpose` on paid reads. Site snippets for WordPress, Cloudflare, Nginx, Apache, Next.js and Express are in this repository.
 
+## 14. Tools for implementers
+
+- **JSON Schema:** [`ai-terms.schema.json`](ai-terms.schema.json), also at <https://aipaygen.com/ai-terms/schema.json>.
+- **Test vectors:** [`ai-terms-vectors.json`](ai-terms-vectors.json), also at <https://aipaygen.com/ai-terms/vectors.json>. `validate` cases say whether a file is valid; `resolve` cases say which access applies to a use on a path (section 6). A reader that agrees with every case reads terms the way the reference implementation does.
+- **Validator:** <https://aipaygen.com/ai-terms#validate> checks a pasted file or the one a site serves. Programmatically: `POST https://aipaygen.com/ai-terms/validate` with the file as the body, or `{"url": "example.com"}`.
+- **Generator:** <https://aipaygen.com/ai-terms#make> writes an allow/deny file for a static site, no account needed.
+
 Comments and pull requests welcome.
