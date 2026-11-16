@@ -29,7 +29,7 @@ Agents without a wallet can still pay through the gateway's `paid_fetch` tool. N
 |---|---|
 | WordPress | [`wordpress/aipaygen-pay-per-crawl`](wordpress/aipaygen-pay-per-crawl) (zip the folder and upload it, or [download the zip](https://aipaygen.com/downloads/aipaygen-pay-per-crawl.zip)) |
 | Cloudflare | One click: [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker) ([`cloudflare-worker/`](cloudflare-worker)), or paste [`snippets/cloudflare-worker.js`](snippets/cloudflare-worker.js) |
-| Nginx | [`snippets/nginx.conf`](snippets/nginx.conf) |
+| Nginx | Report (any mode): [`snippets/nginx-report.conf`](snippets/nginx-report.conf) + [`snippets/nginx-report.sh`](snippets/nginx-report.sh) from cron. Charging: [`snippets/nginx.conf`](snippets/nginx.conf) |
 | Apache | [`snippets/apache.conf`](snippets/apache.conf) |
 | Next.js / Vercel | [`snippets/nextjs-middleware.ts`](snippets/nextjs-middleware.ts) |
 | Express / Node | [`snippets/express.js`](snippets/express.js) |
