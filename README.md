@@ -18,6 +18,10 @@ It uses [x402](https://aipaygen.com/x402), the open protocol for paying over HTT
 
 Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Apache is the exception: its snippet sends unpaid crawlers to the gateway for the price, and doesn't report counts. Nginx answers locally but doesn't report counts either.)
 
+## AI Terms (open draft)
+
+[`spec/ai-terms.md`](spec/ai-terms.md) is an open format for telling AI what it may do with your pages **per use** (search, answer, training, agent: allow, paid or deny), with prices, identity checks, an `AI-Purpose` header and receipts for paid reads. Every pay-per-crawl route gets its terms generated from its settings at `https://aipaygen.com/v1/gateway/terms/<your-route-id>`. Readable version: https://aipaygen.com/ai-terms. Comments and pull requests welcome.
+
 ## Setup
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker)
