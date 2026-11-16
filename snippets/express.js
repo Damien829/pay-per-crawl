@@ -52,11 +52,15 @@ async function aipaygen402(url, bot, path) {
   if (!q || q.charge_mode === "off") return null; // report only: count the visit, serve the page
   // Bots this site lets in free (its route's settings, e.g. AI search in "training" mode): serve the page.
   if ((q.free_bots || []).some((b) => b.toLowerCase() === String(bot).toLowerCase())) return null;
-  const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
-  return new Response(JSON.stringify({ ...quote, help: q.help }), {
-    status: 402,
-    headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(JSON.stringify(quote)) },
-  });
+  try {
+    const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
+    // The header is base64 of plain ASCII, so an accent, a dash or an emoji in a name can't break it.
+    const ascii = JSON.stringify(quote).replace(/[^\x20-\x7e]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+    return new Response(JSON.stringify({ ...quote, help: q.help }), {
+      status: 402,
+      headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(ascii) },
+    });
+  } catch { return null; } // never let a quote problem break the page
 }
 // Visit counts for your AI crawler report, sent every few minutes in one small request.
 async function aipaygenReport(secret) {
@@ -99,29 +103,38 @@ function aipaygenWatch(ip, path, ua, secret) {
   return flush(); // sent with the next batch (every few minutes), never per visit
 }
 app.use(async (req, res, next) => {
-  if (process.env.AIPAYGEN_SECRET && req.get("x-aipaygen-gateway-secret") === process.env.AIPAYGEN_SECRET) return next();
-  const send = async (r) => {
-    r.headers.forEach((v, k) => { if (!["content-encoding", "content-length", "transfer-encoding"].includes(k)) res.set(k, v); });
-    res.status(r.status).send(Buffer.from(await r.arrayBuffer()));
-  };
-  if (req.path === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return send(t); }
-  // robots.txt is free for every crawler: it is how they learn your rules and find your terms.
-  if (req.path === "/robots.txt") return next();
-  // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
-  if (req.get("payment-signature") || req.get("x-payment")) {
-    // Only what the gateway needs (Node's fetch rejects hop-by-hop headers like transfer-encoding).
-    const headers = {};
-    for (const h of ["payment-signature", "x-payment", "user-agent", "accept", "accept-language"]) if (req.get(h)) headers[h] = req.get(h);
-    return send(await fetch(GATEWAY + req.originalUrl, { method: "GET", headers }));
-  }
-  // Behind a proxy or load balancer, set app.set("trust proxy", true) so req.ip is the visitor's address.
-  const named = (req.get("user-agent") || "").match(AI_BOTS);
-  const bot = named ? named[0] : (await isAiIp(req.ip || "")) ? "AI crawler (by IP)" : null;
-  if (!bot) { // people and search engines browse free; very fast page-only readers are listed in your report
-    aipaygenWatch(req.ip, req.path, req.get("user-agent"), process.env.AIPAYGEN_SECRET);
+  try {
+    if (process.env.AIPAYGEN_SECRET && req.get("x-aipaygen-gateway-secret") === process.env.AIPAYGEN_SECRET) return next();
+    const send = async (r) => {
+      r.headers.forEach((v, k) => { if (!["content-encoding", "content-length", "transfer-encoding"].includes(k)) res.set(k, v); });
+      res.status(r.status).send(Buffer.from(await r.arrayBuffer()));
+    };
+    if (req.path === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return send(t); }
+    // robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+    if (req.path === "/robots.txt") return next();
+    // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
+    if (req.get("payment-signature") || req.get("x-payment")) {
+      // Only what the gateway needs (Node's fetch rejects hop-by-hop headers like transfer-encoding).
+      const headers = {};
+      for (const h of ["payment-signature", "x-payment", "user-agent", "accept", "accept-language"]) if (req.get(h)) headers[h] = req.get(h);
+      return send(await fetch(GATEWAY + req.originalUrl, { method: "GET", headers, signal: AbortSignal.timeout(30000) }));
+    }
+    // Behind a proxy or load balancer, set app.set("trust proxy", true) so req.ip is the visitor's address.
+    const named = (req.get("user-agent") || "").match(AI_BOTS);
+    const bot = named ? named[0] : (await isAiIp(req.ip || "")) ? "AI crawler (by IP)" : null;
+    if (!bot) { // people and search engines browse free; very fast page-only readers are listed in your report
+      aipaygenWatch(req.ip, req.path, req.get("user-agent"), process.env.AIPAYGEN_SECRET);
+      return next();
+    }
+    const quote = await aipaygen402(req.protocol + "://" + req.get("host") + req.originalUrl, bot, req.path);
+    aipaygenReport(process.env.AIPAYGEN_SECRET);
+    return quote ? send(quote) : next();
+  } catch (e) {
+    // AIPayGen unreachable or an unexpected error: never crash or hang the site.
+    if (res.headersSent) return;
+    if (req.get("payment-signature") || req.get("x-payment")) {
+      return res.status(503).set({ "retry-after": "60", "cache-control": "no-store" }).json({ error: "PAYMENT_GATEWAY_UNAVAILABLE", message: "The payment service could not be reached. Nothing was charged. Try again shortly." });
+    }
     return next();
   }
-  const quote = await aipaygen402(req.protocol + "://" + req.get("host") + req.originalUrl, bot, req.path);
-  aipaygenReport(process.env.AIPAYGEN_SECRET);
-  return quote ? send(quote) : next();
 });

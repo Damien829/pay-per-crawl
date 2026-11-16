@@ -57,11 +57,15 @@ async function aipaygen402(url, bot, path) {
   if (!q || q.charge_mode === "off") return null; // report only: count the visit, serve the page
   // Bots this site lets in free (its route's settings, e.g. AI search in "training" mode): serve the page.
   if ((q.free_bots || []).some((b) => b.toLowerCase() === String(bot).toLowerCase())) return null;
-  const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
-  return new Response(JSON.stringify({ ...quote, help: q.help }), {
-    status: 402,
-    headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(JSON.stringify(quote)) },
-  });
+  try {
+    const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
+    // The header is base64 of plain ASCII, so an accent, a dash or an emoji in a name can't break it.
+    const ascii = JSON.stringify(quote).replace(/[^\x20-\x7e]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+    return new Response(JSON.stringify({ ...quote, help: q.help }), {
+      status: 402,
+      headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(ascii) },
+    });
+  } catch { return null; } // never let a quote problem break the page
 }
 // Visit counts for your AI crawler report, sent every few minutes in one small request.
 async function aipaygenReport(secret) {
