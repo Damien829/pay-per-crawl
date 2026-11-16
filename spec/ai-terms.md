@@ -19,7 +19,7 @@ AI Terms fills those gaps and leaves robots.txt in place.
 
 - The file lives at `/.well-known/ai-terms` on the site's origin, served as `application/json` (UTF-8).
 - A site MAY also point to it from any response with `Link: <url>; rel="ai-terms"`, and SHOULD do so on HTTP 402 answers. The URL may be off-site (for example a provider that generates terms from the site's settings).
-- A site MAY add `AI-Terms: <url>` to robots.txt. Parsers that don't know the line ignore it.
+- A site MAY add `AI-Terms: <url>` to robots.txt. RFC 9309 allows records beyond its own; crawlers that don't read this one are unaffected.
 
 ## 3. Uses
 
@@ -112,8 +112,10 @@ A paid response carries the x402 `PAYMENT-RESPONSE` header (the settled transact
 - **robots.txt:** unchanged. A `Disallow` still means do not fetch. AI Terms adds uses, prices and receipts for what is fetched.
 - **llms.txt:** a reading guide for AI; complementary.
 - **RSL (Really Simple Licensing):** license terms; a site can point to them from `contact.licensing`.
-- **IETF AI preferences vocabulary:** the four uses are meant to map onto its categories; names will align as that work settles.
-- **Web Bot Auth:** an identity method in section 7.
+- **IETF AI Preferences (draft-ietf-aipref-vocab, -attach):** its categories are AI Training, AI Use and Search. Here `search` = Search, `training` = AI Training, and `answer` and `agent` are two kinds of AI Use. Its `Content-Usage` header and robots.txt rule keep working; where either says no, that holds.
+- **ai.txt / ai.json (draft-car-ai-txt-wellknown):** declares usage policy and links to a pricing page (`Training-Fee`) but defines no payment, purpose declaration or identity check. The members here could also live as an ai.json extension.
+- **Verifiable compliance records (draft-reilly-aipref-compliance):** signed records of what a processor did; explicitly excludes payment. A future signed receipt here may reuse its format.
+- **Web Bot Auth (draft-ietf-webbotauth-httpsig-protocol):** an identity method in section 7.
 - **x402:** the payment protocol in section 9.
 
 ## 12. Security and abuse
