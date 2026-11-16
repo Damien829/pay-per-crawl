@@ -16,7 +16,7 @@ It uses [x402](https://aipaygen.com/x402), the open protocol for paying over HTT
 4. Visit counts (crawler name and the 10 most-requested paths, no visitor data) are sent in small batches, so you get a private **AI crawler report**: which bots visit, how often, and what they would have paid. The link is shown at signup and in the WordPress plugin's settings.
 5. **Fast readers:** crawlers that don't say what they are and don't use published IP ranges still tend to give themselves away: a browser user agent asking for 60+ pages a minute without loading any images or stylesheets. The snippets (and WordPress, on sites with a persistent object cache) list those in your report as a network range (/24 or /48, never the full address) with the user agent. Report only: nothing is charged or blocked, so you can judge before acting.
 
-Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Apache and Caddy are the exception: their snippets send AI crawlers to the gateway for the price, which is also how those visits are counted. Nginx answers locally and reports counts with the small cron script in `snippets/nginx-report.sh`.)
+Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Caddy is the exception: its snippet sends AI crawlers to the gateway for the price, which is also how those visits are counted, and falls back to your own page if the gateway is over capacity or failing. Nginx and Apache answer locally and report counts with a small cron script: `snippets/nginx-report.sh` and `snippets/apache-helper.sh`.)
 
 ## AI Terms (open draft)
 
@@ -36,7 +36,7 @@ For implementers: a [JSON Schema](spec/ai-terms.schema.json), [test vectors](spe
 | WordPress | [`wordpress/aipaygen-pay-per-crawl`](wordpress/aipaygen-pay-per-crawl) (zip the folder and upload it, or [download the zip](https://aipaygen.com/downloads/aipaygen-pay-per-crawl.zip)) |
 | Cloudflare | One click: [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker) ([`cloudflare-worker/`](cloudflare-worker)), or paste [`snippets/cloudflare-worker.js`](snippets/cloudflare-worker.js) |
 | Nginx | Report (any mode): [`snippets/nginx-report.conf`](snippets/nginx-report.conf) + [`snippets/nginx-report.sh`](snippets/nginx-report.sh) from cron. Charging: [`snippets/nginx.conf`](snippets/nginx.conf) |
-| Apache | [`snippets/apache.conf`](snippets/apache.conf) |
+| Apache | [`snippets/apache.conf`](snippets/apache.conf) with [`snippets/apache-helper.sh`](snippets/apache-helper.sh) |
 | Caddy | [`snippets/Caddyfile`](snippets/Caddyfile) |
 | Next.js / Vercel | [`snippets/nextjs-middleware.ts`](snippets/nextjs-middleware.ts) |
 | Express / Node | [`snippets/express.js`](snippets/express.js) |
@@ -71,7 +71,7 @@ Which ones does your site block today? Free check: https://aipaygen.com/ai-crawl
 
 ## Honest limits
 
-- Crawlers from operators that publish no IP list (ClaudeBot, Bytespider and others) are recognized by name only, so one that pretends to be a browser gets the free page, same as with `robots.txt`. The Apache snippet matches by name only.
+- Crawlers from operators that publish no IP list (ClaudeBot, Bytespider and others) are recognized by name only, so one that pretends to be a browser gets the free page, same as with `robots.txt`. The Caddy snippet matches by name only.
 - Check any request yourself with the free `verify_bot` tool: `curl "https://aipaygen.com/v1/verify_bot?ip=1.2.3.4&user_agent=GPTBot"` says verified, fake, disguised or unverifiable.
 - Most crawlers can't pay yet; today this works like a block with a price tag. x402 support in agent frameworks is growing.
 - You need a wallet on Base to receive USDC.
