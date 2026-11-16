@@ -1,13 +1,19 @@
 # Pay-per-crawl via AIPayGen (Caddy 2.6 or newer).
 # Put these lines inside your site block, above your own reverse_proxy / file_server lines.
+# If your site block is built from handle { } blocks, put them inside the handle block that
+# serves your pages instead (at the top level they would never run).
 # Replace YOUR_GATEWAY_SECRET with the gateway secret you got at sign-up.
+#
+# If AIPayGen is ever over capacity or failing (a 429 or 5xx answer), Caddy serves the request
+# from your own site as if these lines weren't there, so an outage on our side can't hide your pages.
 
 	# This site's AI Terms (per-use terms for AI), served at /.well-known/ai-terms.
 	@aipaygen_terms path /.well-known/ai-terms
-	handle @aipaygen_terms {
-		rewrite * /v1/gateway/terms/YOUR_ROUTE_ID
-		reverse_proxy https://aipaygen.com {
-			header_up Host {upstream_hostport}
+	reverse_proxy @aipaygen_terms https://aipaygen.com {
+		rewrite /v1/gateway/terms/YOUR_ROUTE_ID
+		header_up Host {upstream_hostport}
+		@aipaygen_down status 429 5xx
+		handle_response @aipaygen_down {
 		}
 	}
 
@@ -16,12 +22,16 @@
 	# robots.txt is free for every crawler: it is how they learn your rules and find your terms.
 	@aipaygen_ai {
 		not header X-AIPayGen-Gateway-Secret YOUR_GATEWAY_SECRET
-		not path /robots.txt
+		not path /robots.txt /.well-known/ai-terms
 		expression `header_regexp('User-Agent', '(?i)(GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-User|Claude-SearchBot|anthropic-ai|PerplexityBot|Perplexity-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta-externalagent|FacebookBot|cohere-ai|Diffbot|YouBot|MistralAI-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot)') || header({'Payment-Signature': '*'}) || header({'X-Payment': '*'})`
 	}
-	handle @aipaygen_ai {
-		rewrite * /g/YOUR_ROUTE_ID{uri}
-		reverse_proxy https://aipaygen.com {
-			header_up Host {upstream_hostport}
+	reverse_proxy @aipaygen_ai https://aipaygen.com {
+		rewrite /g/YOUR_ROUTE_ID{uri}
+		header_up Host {upstream_hostport}
+		@aipaygen_down status 429 5xx
+		handle_response @aipaygen_down {
+			# A payment that can't be checked is not accepted: the client is told to retry.
+			@aipaygen_paid expression `header({'Payment-Signature': '*'}) || header({'X-Payment': '*'})`
+			respond @aipaygen_paid `{"error":"PAYMENT_GATEWAY_UNAVAILABLE","message":"The payment service could not be reached. Nothing was charged. Try again shortly."}` 503
 		}
 	}
