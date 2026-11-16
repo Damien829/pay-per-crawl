@@ -16,7 +16,7 @@ It uses [x402](https://aipaygen.com/x402), the open protocol for paying over HTT
 4. Visit counts (crawler name and the 10 most-requested paths, no visitor data) are sent in small batches, so you get a private **AI crawler report**: which bots visit, how often, and what they would have paid. The link is shown at signup and in the WordPress plugin's settings.
 5. **Fast readers:** crawlers that don't say what they are and don't use published IP ranges still tend to give themselves away: a browser user agent asking for 60+ pages a minute without loading any images or stylesheets. The snippets (and WordPress, on sites with a persistent object cache) list those in your report as a network range (/24 or /48, never the full address) with the user agent. Report only: nothing is charged or blocked, so you can judge before acting.
 
-Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Apache and Caddy are the exception: their snippets send AI crawlers to the gateway for the price. Nginx answers locally but doesn't report counts either.)
+Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Apache and Caddy are the exception: their snippets send AI crawlers to the gateway for the price, which is also how those visits are counted. Nginx answers locally and reports counts with the small cron script in `snippets/nginx-report.sh`.)
 
 ## AI Terms (open draft)
 
