@@ -16,7 +16,7 @@ It uses [x402](https://aipaygen.com/x402), the open protocol for paying over HTT
 4. Visit counts (crawler name and the 10 most-requested paths, no visitor data) are sent in small batches, so you get a private **AI crawler report**: which bots visit, how often, and what they would have paid. The link is shown at signup and in the WordPress plugin's settings.
 5. **Fast readers:** crawlers that don't say what they are and don't use published IP ranges still tend to give themselves away: a browser user agent asking for 60+ pages a minute without loading any images or stylesheets. The snippets (and WordPress, on sites with a persistent object cache) list those in your report as a network range (/24 or /48, never the full address) with the user agent. Report only: nothing is charged or blocked, so you can judge before acting.
 
-Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Apache is the exception: its snippet sends unpaid crawlers to the gateway for the price, and doesn't report counts. Nginx answers locally but doesn't report counts either.)
+Agents without a wallet can still pay through the gateway's `paid_fetch` tool. No fees to site owners; the gateway never holds your money. (Apache and Caddy are the exception: their snippets send AI crawlers to the gateway for the price. Nginx answers locally but doesn't report counts either.)
 
 ## AI Terms (open draft)
 
@@ -37,11 +37,12 @@ For implementers: a [JSON Schema](spec/ai-terms.schema.json), [test vectors](spe
 | Cloudflare | One click: [Deploy to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker) ([`cloudflare-worker/`](cloudflare-worker)), or paste [`snippets/cloudflare-worker.js`](snippets/cloudflare-worker.js) |
 | Nginx | Report (any mode): [`snippets/nginx-report.conf`](snippets/nginx-report.conf) + [`snippets/nginx-report.sh`](snippets/nginx-report.sh) from cron. Charging: [`snippets/nginx.conf`](snippets/nginx.conf) |
 | Apache | [`snippets/apache.conf`](snippets/apache.conf) |
+| Caddy | [`snippets/Caddyfile`](snippets/Caddyfile) |
 | Next.js / Vercel | [`snippets/nextjs-middleware.ts`](snippets/nextjs-middleware.ts) |
 | Express / Node | [`snippets/express.js`](snippets/express.js) |
 | Django / Python | [`snippets/django_middleware.py`](snippets/django_middleware.py) (stdlib only; set `AIPAYGEN_ROUTE` and `AIPAYGEN_SECRET`) |
 
-On Cloudflare, the one-click Worker deploys in a minute; then set `AIPAYGEN_ROUTE` (your route id) and the secret `AIPAYGEN_SECRET` under Settings > Variables and Secrets if it did not ask for them, and add a route for your site (Workers > aipaygen-pay-per-crawl > Settings > Domains & Routes: `example.com/*`). For the snippets, replace `YOUR_ROUTE_ID` with your route id and set your gateway secret where the snippet says. Step-by-step guides: https://aipaygen.com/pay-per-crawl/setup/nginx (and `/wordpress`, `/cloudflare`, `/apache`, `/nextjs`, `/express`).
+On Cloudflare, the one-click Worker deploys in a minute; then set `AIPAYGEN_ROUTE` (your route id) and the secret `AIPAYGEN_SECRET` under Settings > Variables and Secrets if it did not ask for them, and add a route for your site (Workers > aipaygen-pay-per-crawl > Settings > Domains & Routes: `example.com/*`). For the snippets, replace `YOUR_ROUTE_ID` with your route id and set your gateway secret where the snippet says. Step-by-step guides: https://aipaygen.com/pay-per-crawl/setup/nginx (and `/wordpress`, `/cloudflare`, `/apache`, `/caddy`, `/nextjs`, `/express`, `/django`).
 
 3. Check it:
 
@@ -60,7 +61,7 @@ curl -X PATCH https://aipaygen.com/v1/gateway/YOUR_ROUTE_ID \
   -d '{"charge_mode":"training"}'
 ```
 
-The WordPress plugin and the Cloudflare, Next.js and Express snippets pick it up within an hour, with no reinstall. On Nginx and Apache, remove those names from the bot list in the config.
+The WordPress plugin and the Cloudflare, Next.js and Express snippets pick it up within an hour, with no reinstall. On Nginx, Apache and Caddy, remove those names from the bot list in the config.
 
 ## Which AI crawlers are covered
 

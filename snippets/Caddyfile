@@ -1,0 +1,25 @@
+# Pay-per-crawl via AIPayGen (Caddy 2.6 or newer).
+# Put these lines inside your site block, above your own reverse_proxy / file_server lines.
+# Replace YOUR_GATEWAY_SECRET with the gateway secret you got at sign-up.
+
+	# This site's AI Terms (per-use terms for AI), served at /.well-known/ai-terms.
+	@aipaygen_terms path /.well-known/ai-terms
+	handle @aipaygen_terms {
+		rewrite * /v1/gateway/terms/YOUR_ROUTE_ID
+		reverse_proxy https://aipaygen.com {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	# AI crawlers, and clients that already carry a payment, go through the gateway.
+	# The gateway's own fetch of a page it was paid for carries your secret and is served normally.
+	@aipaygen_ai {
+		not header X-AIPayGen-Gateway-Secret YOUR_GATEWAY_SECRET
+		expression `header_regexp('User-Agent', '(?i)(GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-User|Claude-SearchBot|anthropic-ai|PerplexityBot|Perplexity-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta-externalagent|FacebookBot|cohere-ai|Diffbot|YouBot|MistralAI-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot)') || header({'Payment-Signature': '*'}) || header({'X-Payment': '*'})`
+	}
+	handle @aipaygen_ai {
+		rewrite * /g/YOUR_ROUTE_ID{uri}
+		reverse_proxy https://aipaygen.com {
+			header_up Host {upstream_hostport}
+		}
+	}
