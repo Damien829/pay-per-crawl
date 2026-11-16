@@ -38,7 +38,7 @@ For implementers: a [JSON Schema](spec/ai-terms.schema.json), [test vectors](spe
 | Nginx | Report (any mode): [`snippets/nginx-report.conf`](snippets/nginx-report.conf) + [`snippets/nginx-report.sh`](snippets/nginx-report.sh) from cron. Charging: [`snippets/nginx.conf`](snippets/nginx.conf) |
 | Apache | [`snippets/apache.conf`](snippets/apache.conf) with [`snippets/apache-helper.sh`](snippets/apache-helper.sh) |
 | Caddy | [`snippets/Caddyfile`](snippets/Caddyfile) |
-| Next.js / Vercel | [`snippets/nextjs-middleware.ts`](snippets/nextjs-middleware.ts) |
+| Next.js / Vercel | [`snippets/nextjs-middleware.js`](snippets/nextjs-middleware.js) (save as `middleware.js`, or `proxy.js` on Next.js 16+) |
 | Express / Node | [`snippets/express.js`](snippets/express.js) |
 | Django / Python | [`snippets/django_middleware.py`](snippets/django_middleware.py) (stdlib only; set `AIPAYGEN_ROUTE` and `AIPAYGEN_SECRET`) |
 

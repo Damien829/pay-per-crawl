@@ -1,6 +1,10 @@
-// middleware.ts (Next.js 13+) - pay-per-crawl via AIPayGen.
+// Pay-per-crawl via AIPayGen, for Next.js 13 and newer.
+// Save this file next to your app/ or pages/ folder (inside src/ if you use one), named:
+//   middleware.js   on Next.js 13, 14 and 15
+//   proxy.js        on Next.js 16 and newer
+// Keep the .js ending even in a TypeScript project: it is plain JavaScript, so your type check skips it.
 // Put AIPAYGEN_SECRET (your gateway secret) in the project's environment variables.
-import { NextResponse, type NextRequest, type NextFetchEvent } from "next/server";
+import { NextResponse } from "next/server";
 
 const GATEWAY = "https://aipaygen.com/g/YOUR_ROUTE_ID";
 const AI_BOTS = /GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta\-externalagent|FacebookBot|cohere\-ai|Diffbot|YouBot|MistralAI\-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot/i;
@@ -108,7 +112,7 @@ function aipaygenWatch(ip, path, ua, secret) {
   return flush(); // sent with the next batch (every few minutes), never per visit
 }
 
-export async function middleware(req: NextRequest, ev: NextFetchEvent) {
+export default async function aipaygen(req, ev) {
   const secret = process.env.AIPAYGEN_SECRET;
   if (secret && req.headers.get("x-aipaygen-gateway-secret") === secret) return NextResponse.next();
   if (req.nextUrl.pathname === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return t; }
