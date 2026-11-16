@@ -134,6 +134,7 @@ AIPayGen generates terms for every site from its settings (`/v1/gateway/terms/<r
 - **JSON Schema:** [`ai-terms.schema.json`](ai-terms.schema.json), also at <https://aipaygen.com/ai-terms/schema.json>.
 - **Test vectors:** [`ai-terms-vectors.json`](ai-terms-vectors.json), also at <https://aipaygen.com/ai-terms/vectors.json>. `validate` cases say whether a file is valid; `resolve` cases say which access applies to a use on a path (section 6). A reader that agrees with every case reads terms the way the reference implementation does.
 - **Validator:** <https://aipaygen.com/ai-terms#validate> checks a pasted file or the one a site serves. Programmatically: `POST https://aipaygen.com/ai-terms/validate` with the file as the body, or `{"url": "example.com"}`.
+- **Python reader:** [`readers/python/ai_terms.py`](../readers/python/ai_terms.py): fetch, resolve and validate in one standard-library file; passes every test vector.
 - **Generator:** <https://aipaygen.com/ai-terms#make> writes an allow/deny file for a static site, no account needed.
 
 Comments and pull requests welcome.
