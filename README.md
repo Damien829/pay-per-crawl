@@ -79,3 +79,9 @@ Which ones does your site block today? Free check: https://aipaygen.com/ai-crawl
 ## License
 
 MIT for everything in this repository ([LICENSE](LICENSE)) except the WordPress plugin in `wordpress/`, which is GPL-2.0-or-later ([wordpress/LICENSE](wordpress/LICENSE)).
+
+## Name and trademarks
+
+AIPayGen™ and the AIPayGen logo are trademarks of AIPayGen. The licences above cover the code, not the name: please don't use the name or logo for another product or package, or in a way that suggests we run or endorse it. Saying that your site or tool "works with AIPayGen" is fine.
+
+AI Terms is an open format. Anyone may implement, publish or read AI Terms files, and call them AI Terms, without asking.
