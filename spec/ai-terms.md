@@ -114,7 +114,7 @@ A payment can't be taken back, so a client should know what it is buying, and a 
 
 - A quote (the 402) for a paid page SHOULD describe the page: its title, a short description or excerpt of its text, and its length. In x402 v2 this goes in the response's `extensions`. A site's snippet opt-outs (`nosnippet`, `max-snippet`) apply to the text shown.
 - A quote that describes a page commits to it: the commitment travels with the payment (in x402 v2, in the payment requirement's `extra`, which clients send back unchanged), so the delivery is checked against what that client was shown.
-- A payment answering a described quote MUST NOT be settled unless the content delivered shares most of its main text with the content that was described. A page that is empty, much shorter, or mostly different text is not a delivery, whatever its HTTP status.
+- A payment answering a described quote MUST NOT be settled unless the content delivered shares at least about half of its main text with the content that was described (main text: the page's main region when it marks one, otherwise its visible text). A page that is empty, much shorter, or mostly different text is not a delivery, whatever its HTTP status.
 - The request made to describe a page and the request made to deliver it SHOULD be indistinguishable to the site.
 - A quote that does not describe the page MUST say so (`not-checked`), and a client that wants the check asks for a described quote instead.
 
