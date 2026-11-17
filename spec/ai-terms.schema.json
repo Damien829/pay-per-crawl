@@ -141,7 +141,7 @@
         },
         "described_quote": {
           "type": "string",
-          "description": "Where to ask for a quote that describes the page and is held to it."
+          "description": "Where to ask for a quote that describes the page and is held to it: an RFC 6570 URI Template with one variable, path (the page's path and query, starting with a slash)."
         }
       }
     },

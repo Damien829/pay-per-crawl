@@ -9,12 +9,32 @@ ROUTE="YOUR_ROUTE_ID"
 SECRET="YOUR_GATEWAY_SECRET"          # the gateway secret you got at sign-up (keep this file chmod 700)
 API="https://aipaygen.com"
 DIR="/var/lib/aipaygen"
+PATH="$PATH:/usr/local/sbin:/usr/sbin:/sbin"   # cron's PATH often lacks apachectl's folder
 umask 022
 mkdir -p "$DIR" || exit 1
 rc=0
+# Keep a log under 1 MB (its newest lines), so it can't fill the disk while counts can't be sent.
+cap() {
+  if [ -f "$1" ] && [ "$(wc -c < "$1" | tr -d ' ')" -gt 1048576 ]; then
+    tail -c 1048576 "$1" | tail -n +2 > "$1.cap" && cat "$1.cap" > "$1"
+    rm -f "$1.cap"
+  fi
+}
+# POST the counts. The secret reaches curl on stdin, never on its command line (where ps shows it).
+# Returns 0 when sent, 2 when AIPayGen refused them for good (wrong route or secret), 1 to retry later.
+send() {
+  code=$(printf 'header = "x-aipaygen-gateway-secret: %s"\n' "$SECRET" | curl -sS -m 20 -K - -o /dev/null -w '%{http_code}' -X POST "$1" -H "content-type: application/json" --data-binary "$2" 2>/dev/null) || true
+  case "$code" in
+    2??) return 0 ;;
+    429) return 1 ;;
+    4??) echo "aipaygen: AIPayGen refused the visit counts (HTTP $code). Check ROUTE and SECRET in this script; these counts were dropped." >&2; return 2 ;;
+    *) return 1 ;;
+  esac
+}
 
 # 1. Visit counts. Apache appends to the log, so emptying it in place is safe.
 LOG="$DIR/visits.log"; TMP="$LOG.sending"
+cap "$LOG"
 if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
   cp "$LOG" "$TMP" && : > "$LOG"
   BODY=$(awk -F '\t' '
@@ -31,12 +51,12 @@ if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
       }
       printf "}}"
     }' "$TMP")
-  if curl -fsS -m 20 -X POST "$API/v1/gateway/hits/$ROUTE" \
-       -H "content-type: application/json" -H "x-aipaygen-gateway-secret: $SECRET" --data-binary "$BODY" >/dev/null 2>&1; then
-    rm -f "$TMP"
-  else
-    cat "$TMP" >> "$LOG"; rm -f "$TMP"; rc=1   # keep the visits for the next run
-  fi
+  send "$API/v1/gateway/hits/$ROUTE" "$BODY"
+  case $? in
+    0) rm -f "$TMP" ;;
+    2) rm -f "$TMP"; rc=1 ;;                          # refused for good: sending them again would fail again
+    *) cat "$TMP" >> "$LOG"; rm -f "$TMP"; rc=1 ;;   # keep the visits for the next run
+  esac
 fi
 
 # True when the file is missing or older than this many minutes.

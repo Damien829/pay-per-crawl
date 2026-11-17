@@ -78,4 +78,4 @@ Which ones does your site block today? Free check: https://aipaygen.com/ai-crawl
 
 ## License
 
-GPL-2.0-or-later for the WordPress plugin; MIT for the snippets and readers.
+MIT for everything in this repository ([LICENSE](LICENSE)) except the WordPress plugin in `wordpress/`, which is GPL-2.0-or-later ([wordpress/LICENSE](wordpress/LICENSE)).

@@ -12,7 +12,7 @@ AI_BOTS = re.compile("|".join(map(re.escape, ["GPTBot","OAI-SearchBot","ChatGPT-
 ASSET = re.compile("[.](css|js|mjs|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|map)$", re.I)
 
 _lock = threading.Lock()
-_state = {"quote": None, "quote_at": 0.0, "nets": [], "nets_at": 0.0, "hits": {}, "paths": {}, "n": 0, "sent_at": time.time(), "sending": False}
+_state = {"quote": None, "quote_at": 0.0, "nets": {}, "nets_at": 0.0, "hits": {}, "paths": {}, "n": 0, "sent_at": time.time(), "sending": False, "free_used": {}, "free_win": ""}
 
 
 def _get(url, timeout=3):
@@ -20,9 +20,18 @@ def _get(url, timeout=3):
         return r.read()
 
 
+def _due(key, every):
+    # True for one caller when a refresh is due; it also moves the clock so a failure retries in 5 minutes.
+    with _lock:
+        if time.time() - _state[key] <= every:
+            return False
+        _state[key] = time.time() - every + 300
+        return True
+
+
 def _quote():
-    if _state["quote"] is None or time.time() - _state["quote_at"] > 3600:
-        _state["quote_at"] = time.time() - 3300  # if this fails, retry in 5 minutes
+    # While AIPayGen can't be reached, one request tries again every 5 minutes; the others serve the page at once.
+    if _due("quote_at", 3600):
         try:
             _state["quote"] = json.loads(_get(AIPAYGEN + "/v1/gateway/quote/" + ROUTE))
             _state["quote_at"] = time.time()
@@ -31,25 +40,44 @@ def _quote():
     return _state["quote"]
 
 
-def _ai_ip(ip):
-    # AI crawlers that hide their name, by the address ranges their companies publish (refreshed daily).
-    if time.time() - _state["nets_at"] > 86400:
-        _state["nets_at"] = time.time() - 86100
-        try:
-            nets = []
-            for line in _get(AIPAYGEN + "/v1/ai_bot_ips?format=text").decode().split():
-                try:
-                    nets.append(ipaddress.ip_network(line.strip(), strict=False))
-                except ValueError:
-                    pass
+def _net_key(version, num):
+    # Networks are grouped by the address's first 8 bits (IPv4) or 16 bits (IPv6), so a lookup checks a few, not all.
+    return (version, num >> 24) if version == 4 else (version, num >> 112)
+
+
+def _load_nets():
+    # AI crawlers that hide their name, by the address lists OpenAI, Anthropic, Perplexity, Mistral,
+    # DuckDuckGo and Common Crawl publish. Runs in a background thread, never inside a request.
+    try:
+        nets = {}
+        for line in _get(AIPAYGEN + "/v1/ai_bot_ips?format=text", timeout=10).decode().split():
+            try:
+                n = ipaddress.ip_network(line.strip(), strict=False)  # a bare address is one host
+            except ValueError:
+                continue
+            # A very wide network (shorter than the bucket) goes in every bucket it covers.
+            first, last = int(n.network_address), int(n.broadcast_address)
+            for k in range(_net_key(n.version, first)[1], _net_key(n.version, last)[1] + 1):
+                nets.setdefault((n.version, k), []).append(n)
+        if nets:
             _state["nets"], _state["nets_at"] = nets, time.time()
+    except Exception:
+        pass
+
+
+def _ai_ip(ip):
+    if _due("nets_at", 86400):
+        try:
+            threading.Thread(target=_load_nets, daemon=True).start()
         except Exception:
-            pass
+            pass  # no thread available (some servers): keep the current list, never fail the request
     try:
         addr = ipaddress.ip_address(ip)
     except ValueError:
         return False
-    return any(addr.version == n.version and addr in n for n in _state["nets"])
+    if addr.version == 6 and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+    return any(addr in n for n in _state["nets"].get(_net_key(addr.version, int(addr)), ()))
 
 
 def _send_report(secret):
@@ -137,6 +165,21 @@ class AIPayGenMiddleware:
         # Report-only, gateway unreachable, or a crawler this site lets in free: serve the page.
         if not q or q.get("charge_mode") == "off" or not q.get("accepts") or bot.lower() in [b.lower() for b in q.get("free_bots", [])]:
             return self.get_response(request)
+        # Free allowance (AI Terms "free"): this many pages per UTC hour or day for each verified crawler,
+        # one whose name AND address match the lists AI companies publish. Counted per process, so
+        # several workers may give a little more than the allowance, never less.
+        fa = q.get("free") or {}
+        if named and isinstance(fa.get("requests"), int) and fa["requests"] > 0 and _ai_ip(_client_ip(request)):
+            win = time.strftime("%Y-%m-%dT%H" if fa.get("per") == "hour" else "%Y-%m-%d", time.gmtime())
+            k = bot.lower()
+            with _lock:
+                if _state["free_win"] != win:
+                    _state["free_win"], _state["free_used"] = win, {}
+                used = _state["free_used"]
+                if k in used or len(used) < 200:
+                    used[k] = used.get(k, 0) + 1
+                    if used[k] <= fa["requests"]:
+                        return self.get_response(request)
         quote = {"x402Version": 2, "error": "PAYMENT_REQUIRED",
                  "resource": {"url": request.build_absolute_uri(), "description": q.get("description", ""), "mimeType": "text/html"},
                  "accepts": q["accepts"]}

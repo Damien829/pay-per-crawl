@@ -1,9 +1,25 @@
 // Pay-per-crawl via AIPayGen. Put AIPAYGEN_SECRET (the gateway_secret) in your environment.
 const GATEWAY = "https://aipaygen.com/g/YOUR_ROUTE_ID";
 const AI_BOTS = /GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta\-externalagent|FacebookBot|cohere\-ai|Diffbot|YouBot|MistralAI\-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot/i;
-// AI crawlers that hide their name are caught by address: the IP lists OpenAI, Perplexity,
-// DuckDuckGo and Common Crawl publish, collected daily at https://aipaygen.com/v1/ai_bot_ips
+// AI crawlers that hide their name are caught by address: the IP lists OpenAI, Anthropic, Perplexity,
+// Mistral, DuckDuckGo and Common Crawl publish, collected daily at https://aipaygen.com/v1/ai_bot_ips
 let AI_NETS = [], AI_NETS_AT = 0;
+async function aiNetsLoad() {
+  try {
+    const r = await fetch("https://aipaygen.com/v1/ai_bot_ips?format=text", { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return;
+    const nets = [];
+    for (const c of (await r.text()).split("\n")) {
+      const [a, n] = c.trim().split("/"), x = ipNum(a || "");
+      if (!x) continue;
+      const full = x[0] === 4 ? 32 : 128, len = n === undefined ? full : Number(n); // a bare address is one host
+      if (!/^\d+$/.test(n === undefined ? "0" : n) || len > full) continue; // skip a bad line, keep the rest
+      const s = BigInt(full - len);
+      nets.push([x[0], s, x[1] >> s]);
+    }
+    if (nets.length) { AI_NETS = nets; AI_NETS_AT = Date.now(); }
+  } catch {}
+}
 function ipNum(ip) {
   ip = ip.trim().replace(/^::ffff:(?=\d+\.)/i, "");
   if (ip.includes(".")) { const p = ip.split(".").map(Number); return p.length === 4 && p.every((x) => x >= 0 && x < 256) ? [4, p.reduce((a, x) => a * 256n + BigInt(x), 0n)] : null; }
@@ -11,23 +27,19 @@ function ipNum(ip) {
   const g = t === undefined ? H : [...H, ...Array(Math.max(0, 8 - H.length - T.length)).fill("0"), ...T];
   return g.length === 8 && g.every((x) => /^[0-9a-f]{1,4}$/i.test(x)) ? [6, g.reduce((a, x) => a * 65536n + BigInt(parseInt(x, 16)), 0n)] : null;
 }
-async function isAiIp(ip) {
+// Answers from the list in memory at once; a daily refresh runs in the background (wait keeps it alive on Workers).
+function isAiIp(ip, wait) {
   if (Date.now() - AI_NETS_AT > 864e5) {
-    AI_NETS_AT = Date.now() - 864e5 + 3e5; // if the fetch fails, try again in 5 minutes
-    try {
-      const r = await fetch("https://aipaygen.com/v1/ai_bot_ips?format=text", { signal: AbortSignal.timeout(3000) });
-      if (r.ok) {
-        AI_NETS = (await r.text()).split("\n").map((c) => { const [a, n] = c.split("/"), x = ipNum(a || ""); if (!x) return null; const s = BigInt((x[0] === 4 ? 32 : 128) - Number(n)); return [x[0], s, x[1] >> s]; }).filter(Boolean);
-        AI_NETS_AT = Date.now();
-      }
-    } catch {}
+    AI_NETS_AT = Date.now() - 864e5 + 3e5; // one refresh at a time; if it fails, try again in 5 minutes
+    const p = aiNetsLoad();
+    if (wait) try { wait(p); } catch {}
   }
   const x = ip ? ipNum(ip) : null;
   return !!x && AI_NETS.some(([v, s, b]) => v === x[0] && x[1] >> s === b);
 }
 // Answer AI crawlers here with your price; only paid retries go to AIPayGen.
 const [AIPAYGEN, ROUTE] = GATEWAY.split("/g/");
-let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = Date.now(), FAST = {}, FAST_N = 0;
+let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = Date.now(), FAST = {}, FAST_N = 0, FREE_USED = {}, FREE_WIN = "";
 // This site's AI Terms (what AI may do with its pages, per use; aipaygen.com/ai-terms), served at /.well-known/ai-terms.
 async function aipaygenTerms() {
   try {
@@ -37,7 +49,10 @@ async function aipaygenTerms() {
   return null;
 }
 async function aipaygenQuote() {
-  if (!QUOTE || Date.now() - QUOTE_AT > 36e5) {
+  if (Date.now() - QUOTE_AT > 36e5) {
+    // Set first: while AIPayGen can't be reached, one request tries again every 5 minutes and every
+    // other crawler visit is served the page (or the last price) at once, without waiting on us.
+    QUOTE_AT = Date.now() - 36e5 + 3e5;
     try {
       const r = await fetch(AIPAYGEN + "/v1/gateway/quote/" + ROUTE, { signal: AbortSignal.timeout(3000) });
       if (r.ok) { QUOTE = await r.json(); QUOTE_AT = Date.now(); }
@@ -45,13 +60,27 @@ async function aipaygenQuote() {
   }
   return QUOTE;
 }
-async function aipaygen402(url, bot, path) {
+// verified: the crawler's name AND its address match the lists AI companies publish. Only verified
+// crawlers get the site's free allowance (AI Terms "free"), so claiming a crawler's name earns nothing.
+async function aipaygen402(url, bot, path, verified) {
   HITS[bot] = (HITS[bot] || 0) + 1; HIT_N++;
   if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
   const q = await aipaygenQuote();
   if (!q || q.charge_mode === "off") return null; // report only: count the visit, serve the page
   // Bots this site lets in free (its route's settings, e.g. AI search in "training" mode): serve the page.
   if ((q.free_bots || []).some((b) => b.toLowerCase() === String(bot).toLowerCase())) return null;
+  // Free allowance: this many pages per UTC hour or day for each verified crawler, then the price.
+  // Counted per process, so several servers may give a little more than the allowance, never less.
+  const fa = q.free;
+  if (verified && fa && fa.requests > 0) {
+    const win = new Date().toISOString().slice(0, fa.per === "hour" ? 13 : 10);
+    if (win !== FREE_WIN) { FREE_WIN = win; FREE_USED = {}; }
+    const k = String(bot).toLowerCase();
+    if (k in FREE_USED || Object.keys(FREE_USED).length < 200) {
+      FREE_USED[k] = (FREE_USED[k] || 0) + 1;
+      if (FREE_USED[k] <= fa.requests) return null;
+    }
+  }
   try {
     const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
     // The header is base64 of plain ASCII, so an accent, a dash or an emoji in a name can't break it.
@@ -117,16 +146,16 @@ app.use(async (req, res, next) => {
       // Only what the gateway needs (Node's fetch rejects hop-by-hop headers like transfer-encoding).
       const headers = {};
       for (const h of ["payment-signature", "x-payment", "user-agent", "accept", "accept-language"]) if (req.get(h)) headers[h] = req.get(h);
-      return send(await fetch(GATEWAY + req.originalUrl, { method: "GET", headers, signal: AbortSignal.timeout(30000) }));
+      return send(await fetch(GATEWAY + req.originalUrl, { method: req.method === "HEAD" ? "HEAD" : "GET", headers, signal: AbortSignal.timeout(30000) }));
     }
     // Behind a proxy or load balancer, set app.set("trust proxy", true) so req.ip is the visitor's address.
     const named = (req.get("user-agent") || "").match(AI_BOTS);
-    const bot = named ? named[0] : (await isAiIp(req.ip || "")) ? "AI crawler (by IP)" : null;
+    const bot = named ? named[0] : isAiIp(req.ip || "") ? "AI crawler (by IP)" : null; // the list refreshes in the background
     if (!bot) { // people and search engines browse free; very fast page-only readers are listed in your report
       aipaygenWatch(req.ip, req.path, req.get("user-agent"), process.env.AIPAYGEN_SECRET);
       return next();
     }
-    const quote = await aipaygen402(req.protocol + "://" + req.get("host") + req.originalUrl, bot, req.path);
+    const quote = await aipaygen402(req.protocol + "://" + req.get("host") + req.originalUrl, bot, req.path, !!named && isAiIp(req.ip || ""));
     aipaygenReport(process.env.AIPAYGEN_SECRET);
     return quote ? send(quote) : next();
   } catch (e) {

@@ -112,13 +112,15 @@ When a use is `paid`, the site (or its payment endpoint) answers HTTP 402 with a
 
 A payment can't be taken back, so a client should know what it is buying, and a site should not be paid for something else.
 
-- A quote (the 402) for a paid page SHOULD describe the page: its title, a short description or excerpt of its text, and its length. In x402 v2 this goes in the response's `extensions`. A site's snippet opt-outs (`nosnippet`, `max-snippet`) apply to the text shown.
+- A quote (the 402) for a paid page SHOULD describe the page: its title, a short description or excerpt of its text, and its length. In x402 v2 this is the extension named `ai-terms` in the response's `extensions`: `{ "info": { "title", "description", "excerpt", "words", "delivery": "must-match" }, "schema": <JSON Schema for info> }`. `title` is at most 120 characters, `description` 300, `excerpt` 200 (each may be null); `words` is a whole number. A site's snippet opt-outs (`nosnippet`, `max-snippet`) apply to the text shown.
 - A quote that describes a page commits to it: the commitment travels with the payment (in x402 v2, in the payment requirement's `extra`, which clients send back unchanged), so the delivery is checked against what that client was shown.
-- A payment answering a described quote MUST NOT be settled unless the content delivered shares at least about half of its main text with the content that was described (main text: the page's main region when it marks one, otherwise its visible text). A page that is empty, much shorter, or mostly different text is not a delivery, whatever its HTTP status.
+- A payment answering a described quote MUST NOT be settled unless the content delivered shares at least about half of its main text with the content that was described (main text: the page's main region when it marks one, otherwise its visible text). Precisely: the delivered main text is at least half as long as the described one, and the comparison rejects content that shares less than half of it.
+- A description taken after the payment request is received MUST NOT be used to judge that payment: a site serving the same wrong content to everyone would match itself.
+- A site or gateway that describes pages MUST NOT settle a page payment that carries no valid commitment, unless the quote it answers was not held to a description. It answers with a described quote instead. A page that is empty, much shorter, or mostly different text is not a delivery, whatever its HTTP status.
 - The request made to describe a page and the request made to deliver it SHOULD be indistinguishable to the site.
-- A quote that does not describe the page MUST say so (`not-checked`), and a client that wants the check asks for a described quote instead.
+- A quote is held to a description only if it carries one with `delivery: "must-match"`. Any other quote is not checked, and SHOULD say so: an `ai-terms` extension whose `info` is `{ "delivery": "not-checked", "described_quote": "<where to ask>" }`. A client that wants the check treats a quote with no `ai-terms` description as not checked, and asks for a described quote instead.
 
-The terms file declares which applies: `"preview": { "shows": ["title", "description", "excerpt", "words"], "delivery": "must-match" | "per-quote" | "not-checked", "described_quote": "<where to ask>" }`.
+The terms file declares which applies: `"preview": { "shows": ["title", "description", "excerpt", "words"], "delivery": "must-match" | "per-quote" | "not-checked", "described_quote": "<where to ask>" }`. `described_quote` is an RFC 6570 URI Template with one variable, `path` (the page's path and query, starting with a slash), for example `https://pay.example/g/abc123def456{+path}`.
 
 - `must-match`: every quote describes the page and is held to it.
 - `per-quote`: each quote says which. Quotes from `described_quote` describe the page and are held to it; a quote marked `not-checked` is paid when the page loads.
@@ -147,6 +149,8 @@ A paid response carries the x402 `PAYMENT-RESPONSE` header (the settled transact
 - A client can lie about its name or purpose. Identity checks limit the first; receipts and copy detection make the second visible.
 - Clients MUST cap what they pay per request and per day; a malicious file could set any price.
 - A free allowance is counted per verified identity, so claiming a crawler's name does not earn its allowance.
+- A commitment to a description MUST be integrity-protected with a key the site cannot get from the quote, bound to the request URL and short-lived.
+- The delivery check compares text, not meaning, and does not cover a quote that carries no description.
 - Off-site terms URLs MUST use HTTPS.
 
 ## 13. Reference implementation
