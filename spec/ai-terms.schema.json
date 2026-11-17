@@ -172,6 +172,28 @@
             "requested",
             "none"
           ]
+        },
+        "free": {
+          "type": "object",
+          "required": [
+            "requests",
+            "per"
+          ],
+          "additionalProperties": false,
+          "description": "Free allowance for a paid or denied use: requests per UTC hour or day for a verified client before access applies.",
+          "properties": {
+            "requests": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000000
+            },
+            "per": {
+              "enum": [
+                "hour",
+                "day"
+              ]
+            }
+          }
         }
       }
     },

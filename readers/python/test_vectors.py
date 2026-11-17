@@ -27,6 +27,9 @@ for case in vectors["resolve"]["cases"]:
         print("FAIL resolve: %s -> %s, expected %s" % (case["name"], got, case["access"]))
 
 # The reader's own helpers.
+assert ai_terms.free_allowance({"access": "deny", "free": {"requests": 5, "per": "hour"}}) == (5, "hour")
+assert ai_terms.free_allowance({"access": "allow", "free": {"requests": 5, "per": "hour"}}) is None
+assert ai_terms.free_allowance({"access": "paid", "free": {"requests": True, "per": "day"}}) is None
 assert ai_terms.parse("<html>") is None and ai_terms.parse('{"hello": 1}') is None
 assert ai_terms.allowed_within({"access": "allow"}, 0) is True
 assert ai_terms.allowed_within({"access": "deny"}, 100) is False

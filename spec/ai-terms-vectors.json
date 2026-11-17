@@ -88,6 +88,36 @@
       "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
         "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } },
         "paths": [ { "match": "members/*", "uses": { "search": { "access": "deny" } } } ] }
+    },
+    {
+      "name": "free allowance: training paid after 1000 free requests a day",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-17", "default": "deny", "payment": { "protocol": "x402", "version": 2, "endpoint": "https://pay.example.com/g/abc", "network": "eip155:8453", "asset": "USDC" },
+        "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" }, "free": { "requests": 1000, "per": "day" } }, "agent": { "access": "deny" } } }
+    },
+    {
+      "name": "free allowance on a denied use: 100 requests an hour, then deny",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-17", "default": "deny",
+        "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "deny", "free": { "requests": 100, "per": "hour" } }, "agent": { "access": "deny" } } }
+    },
+    {
+      "name": "free allowance on an allowed use is ignored (a warning, still valid)",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-17", "default": "deny",
+        "uses": { "search": { "access": "allow", "free": { "requests": 10, "per": "day" } }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "deny" }, "agent": { "access": "deny" } } }
+    },
+    {
+      "name": "invalid: free.requests must be a whole number of at least 1",
+      "valid": false,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-17", "default": "deny",
+        "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "deny", "free": { "requests": 0, "per": "day" } }, "agent": { "access": "deny" } } }
+    },
+    {
+      "name": "invalid: free.per must be hour or day",
+      "valid": false,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-17", "default": "deny",
+        "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "deny", "free": { "requests": 1000, "per": "week" } }, "agent": { "access": "deny" } } }
     }
   ],
   "resolve": {

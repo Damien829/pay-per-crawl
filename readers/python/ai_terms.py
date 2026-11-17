@@ -97,6 +97,24 @@ def resolve(terms, use, path="/"):
     return {"access": terms.get("default", "allow")}
 
 
+FREE_MAX_REQUESTS = 1000000000
+
+
+def free_allowance(rule):
+    """The free allowance on a paid or denied use, as (requests, "hour" | "day"), or None.
+
+    A verified client may make that many requests for the use in each UTC hour or day before the
+    use's access applies. Unverified clients get none. Attribution still applies to free reads.
+    """
+    free = rule.get("free") if isinstance(rule, dict) else None
+    if not isinstance(free, dict) or rule.get("access") == "allow":
+        return None
+    n, per = free.get("requests"), free.get("per")
+    if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= FREE_MAX_REQUESTS or per not in ("hour", "day"):
+        return None
+    return n, per
+
+
 def allowed_within(rule, max_price_usd):
     """True when a client may proceed: access is allow, or paid at or under the client's cap.
 
@@ -156,6 +174,21 @@ def validate(doc):
             return False
         if "attribution" in rule and rule["attribution"] not in ("required", "requested", "none"):
             errors.append('%s.attribution must be "required", "requested" or "none".' % where)
+        if "free" in rule:
+            free = rule["free"]
+            if not isinstance(free, dict):
+                errors.append('%s.free must be an object: {"requests": 1000, "per": "day"}.' % where)
+            else:
+                n = free.get("requests")
+                if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= FREE_MAX_REQUESTS:
+                    errors.append("%s.free.requests must be a whole number from 1 to 1,000,000,000." % where)
+                if free.get("per") not in ("hour", "day"):
+                    errors.append('%s.free.per must be "hour" or "day".' % where)
+                for k in free:
+                    if k not in ("requests", "per"):
+                        warnings.append("%s.free.%s is not part of 0.1; clients ignore it." % (where, k))
+                if rule["access"] == "allow":
+                    warnings.append('%s has a "free" allowance but its access is already "allow"; the allowance is ignored.' % where)
         if rule["access"] != "paid":
             if "price" in rule:
                 warnings.append('%s has a "price" but is not paid; the price is ignored.' % where)

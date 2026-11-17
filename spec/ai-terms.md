@@ -81,7 +81,11 @@ Every access by an AI system is one of four uses:
 - `price`: `amount` as a decimal string, `currency` (`USD` in 0.1; settled in a USD stablecoin), `per` = `page` or `request`.
 - `attribution`: `required` (cite and link the page when its content is shown), `requested`, or `none`.
 
-A client MUST NOT use content for a purpose whose access is `deny`, and MUST pay before using it for a purpose whose access is `paid`.
+- `free` (optional, on a `paid` or `deny` use): `{ "requests": 1000, "per": "day" }`. A verified client (section 7) may make up to `requests` requests for that use in each UTC `hour` or `day` without paying or being refused; after that, the use's access applies. `requests` is a whole number from 1 to 1,000,000,000. An unverified client gets no allowance. Attribution still applies to free reads. On an `allow` use, `free` is ignored.
+
+A client MUST NOT use content for a purpose whose access is `deny`, and MUST pay before using it for a purpose whose access is `paid`, beyond any free allowance.
+
+The allowance is for pacing: a crawler that reads steadily can stay within it, and only a burst meets the terms. A site counts requests per client identity (operator) and per window. A site that counts approximately (several servers, each with its own count) MAY give more than the allowance, and SHOULD NOT give less.
 
 ## 6. Paths
 
@@ -124,6 +128,7 @@ A paid response carries the x402 `PAYMENT-RESPONSE` header (the settled transact
 - Terms are a statement, not enforcement. Sites SHOULD enforce at the edge (402 for paid uses, verified identity for allowed ones); the reference implementation does.
 - A client can lie about its name or purpose. Identity checks limit the first; receipts and copy detection make the second visible.
 - Clients MUST cap what they pay per request and per day; a malicious file could set any price.
+- A free allowance is counted per verified identity, so claiming a crawler's name does not earn its allowance.
 - Off-site terms URLs MUST use HTTPS.
 
 ## 13. Reference implementation
