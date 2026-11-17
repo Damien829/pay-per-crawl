@@ -112,11 +112,17 @@ When a use is `paid`, the site (or its payment endpoint) answers HTTP 402 with a
 
 A payment can't be taken back, so a client should know what it is buying, and a site should not be paid for something else.
 
-- The 402 for a paid page SHOULD describe the page: its title, a short description or excerpt, and its length. In x402 v2 this goes in the response's `extensions`. A site's snippet opt-outs (`nosnippet`, `max-snippet`) apply to the text shown.
-- A site (or the payment endpoint acting for it) that does this declares it in the terms file: `"preview": { "shows": ["title", "description", "words"], "delivery": "must-match" }`.
-- With `"delivery": "must-match"`, the payment MUST NOT be settled unless the content delivered is the content that was described. A page that is empty, much shorter, or mostly different text is not a delivery, whatever its HTTP status. A page that could not be described is not paid for.
+- A quote (the 402) for a paid page SHOULD describe the page: its title, a short description or excerpt of its text, and its length. In x402 v2 this goes in the response's `extensions`. A site's snippet opt-outs (`nosnippet`, `max-snippet`) apply to the text shown.
+- A quote that describes a page commits to it: the commitment travels with the payment (in x402 v2, in the payment requirement's `extra`, which clients send back unchanged), so the delivery is checked against what that client was shown.
+- A payment answering a described quote MUST NOT be settled unless the content delivered shares most of its main text with the content that was described. A page that is empty, much shorter, or mostly different text is not a delivery, whatever its HTTP status.
 - The request made to describe a page and the request made to deliver it SHOULD be indistinguishable to the site.
-- `"delivery": "not-checked"` says the page is described but the delivery is not compared.
+- A quote that does not describe the page MUST say so (`not-checked`), and a client that wants the check asks for a described quote instead.
+
+The terms file declares which applies: `"preview": { "shows": ["title", "description", "excerpt", "words"], "delivery": "must-match" | "per-quote" | "not-checked", "described_quote": "<where to ask>" }`.
+
+- `must-match`: every quote describes the page and is held to it.
+- `per-quote`: each quote says which. Quotes from `described_quote` describe the page and are held to it; a quote marked `not-checked` is paid when the page loads.
+- `not-checked`: pages are not described and deliveries are not compared.
 
 This does not judge whether a page is good. It holds the site to the page it showed.
 

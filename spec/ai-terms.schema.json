@@ -127,6 +127,7 @@
             "enum": [
               "title",
               "description",
+              "excerpt",
               "words"
             ]
           }
@@ -134,8 +135,13 @@
         "delivery": {
           "enum": [
             "must-match",
+            "per-quote",
             "not-checked"
           ]
+        },
+        "described_quote": {
+          "type": "string",
+          "description": "Where to ask for a quote that describes the page and is held to it."
         }
       }
     },
