@@ -108,6 +108,18 @@ A client SHOULD send `AI-Purpose: <use>` (one of `search`, `answer`, `training`,
 
 When a use is `paid`, the site (or its payment endpoint) answers HTTP 402 with an x402 v2 quote for that request. The client signs the payment and retries with the `PAYMENT-SIGNATURE` header; the content is returned only after the payment is verified. Settlement goes directly from the client's wallet to the site's wallet.
 
+### 9.1 Describing a page before payment
+
+A payment can't be taken back, so a client should know what it is buying, and a site should not be paid for something else.
+
+- The 402 for a paid page SHOULD describe the page: its title, a short description or excerpt, and its length. In x402 v2 this goes in the response's `extensions`. A site's snippet opt-outs (`nosnippet`, `max-snippet`) apply to the text shown.
+- A site (or the payment endpoint acting for it) that does this declares it in the terms file: `"preview": { "shows": ["title", "description", "words"], "delivery": "must-match" }`.
+- With `"delivery": "must-match"`, the payment MUST NOT be settled unless the content delivered is the content that was described. A page that is empty, much shorter, or mostly different text is not a delivery, whatever its HTTP status. A page that could not be described is not paid for.
+- The request made to describe a page and the request made to deliver it SHOULD be indistinguishable to the site.
+- `"delivery": "not-checked"` says the page is described but the delivery is not compared.
+
+This does not judge whether a page is good. It holds the site to the page it showed.
+
 ## 10. Receipts
 
 A paid response carries the x402 `PAYMENT-RESPONSE` header (the settled transaction) and SHOULD echo `AI-Purpose`. Together with the URL and time, that is a **record of licensed use**: the site can show who read what, for which use, and what was paid; the AI company can show that it licensed the content it used.

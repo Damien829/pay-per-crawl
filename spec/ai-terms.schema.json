@@ -114,6 +114,31 @@
     "receipts": {
       "type": "string"
     },
+    "preview": {
+      "type": "object",
+      "required": [
+        "delivery"
+      ],
+      "description": "What a client is told about a paid page before paying (in the 402), and whether the payment is settled only when the delivered page matches it.",
+      "properties": {
+        "shows": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "title",
+              "description",
+              "words"
+            ]
+          }
+        },
+        "delivery": {
+          "enum": [
+            "must-match",
+            "not-checked"
+          ]
+        }
+      }
+    },
     "report_only": {
       "type": "boolean"
     },
