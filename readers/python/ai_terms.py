@@ -177,7 +177,7 @@ def validate(doc):
         if "free" in rule:
             free = rule["free"]
             if not isinstance(free, dict):
-                errors.append('%s.free must be an object: {"requests": 1000, "per": "day"}.' % where)
+                errors.append('%s.free must be an object: {"requests": 100, "per": "day"}.' % where)
             else:
                 n = free.get("requests")
                 if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= FREE_MAX_REQUESTS:

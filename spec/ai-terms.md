@@ -81,7 +81,7 @@ Every access by an AI system is one of four uses:
 - `price`: `amount` as a decimal string, `currency` (`USD` in 0.1; settled in a USD stablecoin), `per` = `page` or `request`.
 - `attribution`: `required` (cite and link the page when its content is shown), `requested`, or `none`.
 
-- `free` (optional, on a `paid` or `deny` use): `{ "requests": 1000, "per": "day" }`. A verified client (section 7) may make up to `requests` requests for that use in each UTC `hour` or `day` without paying or being refused; after that, the use's access applies. `requests` is a whole number from 1 to 1,000,000,000. An unverified client gets no allowance. Attribution still applies to free reads. On an `allow` use, `free` is ignored.
+- `free` (optional, on a `paid` or `deny` use): `{ "requests": 100, "per": "day" }`. A verified client (section 7) may make up to `requests` requests for that use in each UTC `hour` or `day` without paying or being refused; after that, the use's access applies. `requests` is a whole number from 1 to 1,000,000,000. An unverified client gets no allowance. Attribution still applies to free reads. On an `allow` use, `free` is ignored.
 
 A client MUST NOT use content for a purpose whose access is `deny`, and MUST pay before using it for a purpose whose access is `paid`, beyond any free allowance.
 

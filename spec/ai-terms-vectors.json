@@ -90,10 +90,10 @@
         "paths": [ { "match": "members/*", "uses": { "search": { "access": "deny" } } } ] }
     },
     {
-      "name": "free allowance: training paid after 1000 free requests a day",
+      "name": "free allowance: training paid after 100 free requests a day",
       "valid": true,
       "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-17", "default": "deny", "payment": { "protocol": "x402", "version": 2, "endpoint": "https://pay.example.com/g/abc", "network": "eip155:8453", "asset": "USDC" },
-        "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" }, "free": { "requests": 1000, "per": "day" } }, "agent": { "access": "deny" } } }
+        "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" }, "free": { "requests": 100, "per": "day" } }, "agent": { "access": "deny" } } }
     },
     {
       "name": "free allowance on a denied use: 100 requests an hour, then deny",
