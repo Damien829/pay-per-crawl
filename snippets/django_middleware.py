@@ -166,8 +166,8 @@ class AIPayGenMiddleware:
         if not q or q.get("charge_mode") == "off" or not q.get("accepts") or bot.lower() in [b.lower() for b in q.get("free_bots", [])]:
             return self.get_response(request)
         # Free allowance (AI Terms "free"): this many pages per UTC hour or day for each verified crawler,
-        # one whose name AND address match the lists AI companies publish. Counted per process, so
-        # several workers may give a little more than the allowance, never less.
+        # one whose name AND address match the lists AI companies publish. Counted separately by each
+        # worker process: a site running several can give up to that many times the allowance (never less).
         fa = q.get("free") or {}
         if named and isinstance(fa.get("requests"), int) and fa["requests"] > 0 and _ai_ip(_client_ip(request)):
             win = time.strftime("%Y-%m-%dT%H" if fa.get("per") == "hour" else "%Y-%m-%d", time.gmtime())
