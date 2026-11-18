@@ -100,7 +100,12 @@ Each use is resolved on its own: among the entries that match the path and list 
 - `published-ip-ranges`: the request's address must be in the operator's published list (OpenAI, Google, Perplexity, DuckDuckGo and Common Crawl publish them).
 - `web-bot-auth`: the request carries an HTTP message signature from the operator's published key (IETF Web Bot Auth drafts).
 
-A client whose claimed identity fails a listed check is treated as unidentified: the `default` terms apply, and the site MAY label it as fake in its records.
+`identity.unverified` says what applies to a client whose claimed identity fails every listed check:
+
+- `treated-as-unidentified` (also when the member is absent or unknown): the `default` terms apply.
+- `treated-as-claimed`: the terms for the use its claimed identity is documented for (for example `training` for GPTBot), or `default` if none.
+
+Either way it gets no free allowance, and the site MAY label it as fake in its records. A client that claims no identity the site can check is not verified (no allowance) but hasn't failed: the terms for its declared use apply.
 
 ## 8. Declaring the purpose
 
@@ -173,7 +178,7 @@ AIPayGen generates terms for every site from its settings (`/v1/gateway/terms/<r
 
 ## 15. Changes
 
-- Clarification (2026-11-18): paths are resolved per use, ties go to the first entry, and `match` is matched against the percent-encoded path without the query (section 6). Every 402 sent because of the terms carries `Link: rel="ai-terms"` (section 2). `*` matches the empty string; paths and patterns are compared normalized; a use value that isn't an object with a valid `access` counts as not listed. `payment.endpoint` has no query or fragment (one new invalid vector). New section 16: how terms are written as IETF AI Preferences (`Content-Usage`) and robots.txt rules. Still `"ai_terms": "0.1"`; readers that followed the earlier wording another way may resolve some files differently.
+- Clarification (2026-11-18): paths are resolved per use, ties go to the first entry, and `match` is matched against the percent-encoded path without the query (section 6). Every 402 sent because of the terms carries `Link: rel="ai-terms"` (section 2). `*` matches the empty string; paths and patterns are compared normalized; a use value that isn't an object with a valid `access` counts as not listed. `payment.endpoint` has no query or fragment (one new invalid vector). New section 16: how terms are written as IETF AI Preferences (`Content-Usage`) and robots.txt rules. `identity.unverified` documented (section 7). Still `"ai_terms": "0.1"`; readers that followed the earlier wording another way may resolve some files differently.
 - Clarification (2026-11-18): `payment.endpoint` is an absolute `https` URL (section 9). One published test vector used prose there and was corrected; files that already used a URL are unaffected. Still `"ai_terms": "0.1"`.
 
 ## 16. AI Terms as AI Preferences (aipref)

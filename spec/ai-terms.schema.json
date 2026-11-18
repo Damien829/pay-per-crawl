@@ -101,7 +101,8 @@
           }
         },
         "unverified": {
-          "type": "string"
+          "type": "string",
+          "description": "A client that claims an identity and fails the check: treated-as-claimed (the terms for the use its claimed identity is documented for, with no free allowance) or treated-as-unidentified (default applies)."
         }
       }
     },

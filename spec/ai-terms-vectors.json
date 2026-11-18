@@ -164,6 +164,18 @@
       "valid": false, "error_contains": "preview.delivery",
       "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-18", "default": "allow",
         "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } }, "preview": { "shows": ["title"] } }
+    },
+    {
+      "name": "identity: a client that fails the check is treated as the crawler it claims",
+      "valid": true,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-18", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } }, "identity": { "verify": ["published-ip-ranges"], "unverified": "treated-as-claimed" } }
+    },
+    {
+      "name": "identity.verify must be a list",
+      "valid": false, "error_contains": "identity.verify",
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-18", "default": "allow",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } }, "identity": { "verify": "published-ip-ranges" } }
     }
   ],
   "resolve": {

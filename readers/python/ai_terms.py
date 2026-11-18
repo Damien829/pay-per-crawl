@@ -358,6 +358,16 @@ def validate(doc):
                 errors.append('"preview.shows" must list "title", "description", "excerpt" and/or "words".')
     if "contact" in doc and not isinstance(doc["contact"], dict):
         errors.append('"contact" must be an object.')
+    if "identity" in doc:
+        ident = doc["identity"]
+        if not isinstance(ident, dict):
+            errors.append('"identity" must be an object.')
+        else:
+            v = ident.get("verify")
+            if v is not None and (not isinstance(v, list) or any(not isinstance(x, str) for x in v)):
+                errors.append('"identity.verify" must be a list of method names, like ["published-ip-ranges"].')
+            if "unverified" in ident and ident["unverified"] not in ("treated-as-claimed", "treated-as-unidentified"):
+                warnings.append('"identity.unverified" is not "treated-as-claimed" or "treated-as-unidentified".')
     return errors, warnings
 
 
