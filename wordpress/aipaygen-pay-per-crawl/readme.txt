@@ -57,7 +57,7 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 
 = What if a crawler pretends to be a browser? =
 
-If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
+If it comes from an address its operator publishes (OpenAI, Anthropic, Perplexity, Mistral, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (Bytespider, for example) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
 

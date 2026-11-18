@@ -73,7 +73,7 @@ Which ones does your site block today? Free check: https://aipaygen.com/ai-crawl
 
 ## Honest limits
 
-- Crawlers from operators that publish no IP list (ClaudeBot, Bytespider and others) are recognized by name only, so one that pretends to be a browser gets the free page, same as with `robots.txt`. The Caddy snippet matches by name only.
+- Crawlers from operators that publish no IP list (Bytespider and others) are recognized by name only, so one that pretends to be a browser gets the free page, same as with `robots.txt`. The Caddy snippet matches by name only.
 - Check any request yourself with the free `verify_bot` tool: `curl "https://aipaygen.com/v1/verify_bot?ip=1.2.3.4&user_agent=GPTBot"` says verified, fake, disguised or unverifiable.
 - Most crawlers can't pay yet; today this works like a block with a price tag. x402 support in agent frameworks is growing.
 - The free report needs no wallet. To be paid, you add a wallet on Base, which receives the USDC directly.
