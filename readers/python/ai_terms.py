@@ -64,37 +64,114 @@ def fetch(site, timeout=5.0, user_agent="ai-terms-python/0.1", purpose="agent"):
         return None
 
 
+GLOB_MAX_LEN, GLOB_MAX_STARS = 512, 16
+_UNRESERVED = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+_PATH_CHARS = _UNRESERVED | set("!$&'()*+,;=:@/")
+_HEX = "0123456789abcdefABCDEF"
+
+
+def normalize_path(s):
+    """A path or pattern in one comparable form (RFC 3986 section 6.2.2): hex digits upper-case, encoded
+    unreserved characters decoded, anything outside the path set percent-encoded as UTF-8."""
+    out, i = [], 0
+    while i < len(s):
+        c = s[i]
+        if c == "%" and i + 2 < len(s) and s[i + 1] in _HEX and s[i + 2] in _HEX:
+            ch = chr(int(s[i + 1:i + 3], 16))
+            out.append(ch if ch in _UNRESERVED else "%" + s[i + 1:i + 3].upper())
+            i += 3
+            continue
+        if c in _PATH_CHARS:
+            out.append(c)
+        else:
+            out.extend("%%%02X" % b for b in c.encode("utf-8"))
+        i += 1
+    return "".join(out)
+
+
+def _segment_match(pat, seg):
+    pieces = pat.split("*")
+    if len(pieces) == 1:
+        return pat == seg
+    first, last = pieces[0], pieces[-1]
+    if len(first) + len(last) > len(seg) or not seg.startswith(first) or not seg.endswith(last):
+        return False
+    at, end = len(first), len(seg) - len(last)
+    for piece in pieces[1:-1]:
+        if not piece:
+            continue
+        found = seg.find(piece, at)
+        if found < 0 or found + len(piece) > end:
+            return False
+        at = found + len(piece)
+    return True
+
+
 def _matches(pattern, path):
-    # "*" matches any characters within one path segment; the pattern must match the whole path.
-    regex = "[^/]*".join(re.escape(piece) for piece in pattern.split("*"))
-    return re.fullmatch(regex, path) is not None
+    # "*" matches any characters except "/"; the pattern must match the whole path. Linear: segment by segment,
+    # leftmost placement of each piece (never a backtracking regular expression).
+    if len(pattern) > GLOB_MAX_LEN or pattern.count("*") > GLOB_MAX_STARS:
+        return False
+    ps, ss = pattern.split("/"), path.split("/")
+    return len(ps) == len(ss) and all(_segment_match(p, q) for p, q in zip(ps, ss))
+
+
+def _usable(rule):
+    return isinstance(rule, dict) and rule.get("access") in ("allow", "paid", "deny")
 
 
 def resolve(terms, use, path="/"):
     """The terms that apply to one use on one path, as a dict with at least "access".
 
-    The top-level entry for the use applies unless a `paths` entry matches the path and lists
-    that use; among matching entries the most specific wins (most literal characters).
-    A use the file does not list falls back to `default`.
+    Each use on its own: among the `paths` entries that match the path and list the use (as an object with a
+    valid access), the one with the most literal characters wins, the first on a tie; else the top-level
+    terms for the use; else `default`. Path and patterns are compared normalized (normalize_path). `path` is
+    the request path as a server resolves it: dot-segments already removed, no query.
     """
     if use not in USES:
         raise ValueError("use must be one of %s" % ", ".join(USES))
-    best, best_len = None, -1
-    for entry in terms.get("paths") or []:
-        if not isinstance(entry, dict) or not isinstance(entry.get("match"), str):
+    best, best_len, p0 = None, -1, normalize_path(path)
+    paths = terms.get("paths")
+    for entry in paths if isinstance(paths, list) else []:
+        if not isinstance(entry, dict) or not isinstance(entry.get("match"), str) or not isinstance(entry.get("uses"), dict):
             continue
-        rule = (entry.get("uses") or {}).get(use)
-        if not isinstance(rule, dict):
+        rule = entry["uses"].get(use)
+        if not _usable(rule):
             continue
-        literal = len(entry["match"].replace("*", ""))
-        if _matches(entry["match"], path) and literal > best_len:
+        m = normalize_path(entry["match"])
+        literal = len(m.replace("*", ""))
+        if _matches(m, p0) and literal > best_len:
             best, best_len = rule, literal
     if best is not None:
         return best
-    rule = (terms.get("uses") or {}).get(use)
-    if isinstance(rule, dict):
+    uses = terms.get("uses")
+    rule = uses.get(use) if isinstance(uses, dict) else None
+    if _usable(rule):
         return rule
-    return {"access": terms.get("default", "allow")}
+    d = terms.get("default")
+    return {"access": d if d in ("allow", "paid", "deny") else "allow"}
+
+
+def content_usage(terms, path="/"):
+    """The IETF aipref Content-Usage value these terms imply for a path, e.g. "train-ai=n", or "" for none.
+
+    Mapping (draft-ovalles-ai-terms-03): train-ai is y when training is allowed, n when it is paid or denied;
+    ai-use is y when answer and agent are both allowed, n when neither is, otherwise not stated; search is y
+    when search and training are both allowed (aipref Search also allows training inside search), otherwise
+    not stated. A report_only document states nothing.
+    """
+    if terms.get("report_only") is True:
+        return ""
+    allowed = lambda use: resolve(terms, use, path)["access"] == "allow"
+    out = ["train-ai=" + ("y" if allowed("training") else "n")]
+    answer, agent = allowed("answer"), allowed("agent")
+    if answer and agent:
+        out.append("ai-use=y")
+    elif not answer and not agent:
+        out.append("ai-use=n")
+    if allowed("search") and allowed("training"):
+        out.append("search=y")
+    return ", ".join(out)
 
 
 FREE_MAX_REQUESTS = 1000000000
@@ -148,6 +225,8 @@ def validate(doc):
         parts = urlsplit(site)
         if not parts.scheme or not parts.netloc:
             errors.append('"site" must be a full URL, like "https://example.com".')
+        elif parts.scheme not in ("https", "http"):
+            errors.append('"site" must be a web origin, like "https://example.com".')
         elif parts.scheme != "https":
             warnings.append('"site" should be an https:// origin.')
 
@@ -216,8 +295,8 @@ def validate(doc):
             errors.append('%s.protocol must be "x402" in 0.1.' % where)
         if not isinstance(payment.get("endpoint"), str) or not payment["endpoint"]:
             errors.append("%s.endpoint is required: where a client pays." % where)
-        elif not re.match(r'^https://[^\s<>"]+\Z', payment["endpoint"]):
-            errors.append("%s.endpoint must be an https URL: the content at path P is paid for at endpoint + P." % where)
+        elif not re.match(r'^https://[^\s<>"?#]+\Z', payment["endpoint"]) or not _valid_host(payment["endpoint"]):
+            errors.append("%s.endpoint must be an https URL with no query or fragment: the content at path P is paid for at endpoint + P." % where)
 
     top_paid = doc.get("default") == "paid"
     unpayable_path = False
@@ -267,4 +346,23 @@ def validate(doc):
         errors.append('A use is "paid" but there is no "payment": a client has no way to pay.')
     if "purpose_header" in doc and doc["purpose_header"] != "AI-Purpose":
         errors.append('"purpose_header" must be "AI-Purpose" in 0.1.')
+    if "preview" in doc:
+        pv = doc["preview"]
+        if not isinstance(pv, dict):
+            errors.append('"preview" must be an object.')
+        else:
+            if pv.get("delivery") not in ("must-match", "per-quote", "not-checked"):
+                errors.append('"preview.delivery" must be "must-match", "per-quote" or "not-checked".')
+            shows = pv.get("shows")
+            if shows is not None and (not isinstance(shows, list) or any(v not in ("title", "description", "excerpt", "words") for v in shows)):
+                errors.append('"preview.shows" must list "title", "description", "excerpt" and/or "words".')
+    if "contact" in doc and not isinstance(doc["contact"], dict):
+        errors.append('"contact" must be an object.')
     return errors, warnings
+
+
+def _valid_host(url):
+    try:
+        return bool(urlsplit(url).hostname)
+    except ValueError:
+        return False

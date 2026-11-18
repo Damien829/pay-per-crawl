@@ -20,6 +20,7 @@
 	# AI crawlers, and clients that already carry a payment, go through the gateway.
 	# The gateway's own fetch of a page it was paid for carries your secret and is served normally.
 	# robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+	# Lines to add to it, written from your AI Terms (IETF aipref Content-Usage; training-only crawlers): https://aipaygen.com/v1/gateway/robots/YOUR_ROUTE_ID
 	@aipaygen_ai {
 		not header X-AIPayGen-Gateway-Secret YOUR_GATEWAY_SECRET
 		not path /robots.txt /.well-known/ai-terms

@@ -26,6 +26,13 @@ for case in vectors["resolve"]["cases"]:
         failed += 1
         print("FAIL resolve: %s -> %s, expected %s" % (case["name"], got, case["access"]))
 
+# aipref Content-Usage values (the "signals" cases; the robots.txt cases check a generator, which this reader is not).
+for case in vectors["signals"]["content_usage"]:
+    got = ai_terms.content_usage(case.get("terms", terms), case["path"])
+    if got != case["value"]:
+        failed += 1
+        print("FAIL content_usage: %s -> %r, expected %r" % (case["name"], got, case["value"]))
+
 # The reader's own helpers.
 assert ai_terms.free_allowance({"access": "deny", "free": {"requests": 5, "per": "hour"}}) == (5, "hour")
 assert ai_terms.free_allowance({"access": "allow", "free": {"requests": 5, "per": "hour"}}) is None
@@ -38,6 +45,12 @@ assert ai_terms.allowed_within({"access": "paid", "price": {"amount": "5"}}, 0.0
 assert ai_terms.allowed_within({"access": "paid"}, 0.01) is False
 assert ai_terms.fetch("http://example.com") is None  # https only
 
-total = len(vectors["validate"]) + len(vectors["resolve"]["cases"])
+assert ai_terms.content_usage({"default": "allow", "uses": {}}) == "train-ai=y, ai-use=y, search=y"
+assert ai_terms.content_usage({"default": "deny", "uses": {"search": {"access": "paid"}}}) == "train-ai=n, ai-use=n"
+# Linear matching: a hostile pattern answers at once (a backtracking regex took seconds).
+import time
+t0 = time.time(); assert not ai_terms._matches("/*a*a*a*a*a*a*b", "/" + "a" * 5000); assert time.time() - t0 < 0.5
+
+total = len(vectors["validate"]) + len(vectors["resolve"]["cases"]) + len(vectors["signals"]["content_usage"])
 print("%d of %d vectors pass" % (total - failed, total))
 sys.exit(1 if failed else 0)

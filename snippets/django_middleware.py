@@ -104,6 +104,36 @@ def _send_report(secret):
     threading.Thread(target=post, daemon=True).start()
 
 
+def _sign(resp, q, page=True):
+    # What the terms say, in headers crawlers already read: Link rel="ai-terms" (on the 402 and on pages served to
+    # AI crawlers) and the IETF aipref Content-Usage, e.g. "train-ai=n" (on pages only: it describes the content).
+    if not q:
+        return resp
+    terms, cu = q.get("terms"), q.get("content_usage")
+    if isinstance(terms, str) and re.match(r'^https:[^\s<>"]+\Z', terms):
+        link = "<" + terms + '>; rel="ai-terms"'
+        old = resp.get("link", "")
+        if not re.search(r'rel="?ai-terms', old):
+            resp["link"] = old + ", " + link if old else link
+    if page and isinstance(cu, str) and re.match(r'^[a-z-]+=[yn](, [a-z-]+=[yn]){0,5}\Z', cu):
+        # Combined with the site's own, as IETF aipref combines preferences: n in either is n; the site's other
+        # members are kept, and categories it doesn't state are added from ours.
+        mine = dict(p.split("=") for p in cu.split(", "))
+        out = []
+        for p in (resp.get("content-usage", "") or "").split(","):
+            t = p.strip()
+            if not t:
+                continue
+            k = re.split(r"[=;]", t)[0]
+            if k in mine:
+                out.append(k + "=n" if mine.pop(k) == "n" else t)
+            else:
+                out.append(t)
+        out += [k + "=" + v for k, v in mine.items()]
+        resp["content-usage"] = ", ".join(out)
+    return resp
+
+
 def _client_ip(request):
     # Behind an AWS load balancer or another proxy, the visitor is the first X-Forwarded-For address.
     fwd = request.META.get("HTTP_X_FORWARDED_FOR", "")
@@ -131,6 +161,7 @@ class AIPayGenMiddleware:
         if secret and h.get("x-aipaygen-gateway-secret") == secret:
             return self.get_response(request)
         # robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+        # Lines to add to it, written from your AI Terms (IETF aipref Content-Usage; training-only crawlers): https://aipaygen.com/v1/gateway/robots/YOUR_ROUTE_ID
         if request.path == "/robots.txt":
             return self.get_response(request)
         # A crawler retrying with a payment: AIPayGen verifies it, fetches the page and pays your wallet.
@@ -144,7 +175,7 @@ class AIPayGenMiddleware:
             except Exception:
                 return self.get_response(request)
             resp = HttpResponse(body, status=status)
-            for k in ("content-type", "payment-required", "payment-response", "ai-purpose", "link"):
+            for k in ("content-type", "payment-required", "payment-response", "ai-purpose", "link", "content-usage"):
                 if headers.get(k):
                     resp[k] = headers[k]
             return resp
@@ -164,7 +195,7 @@ class AIPayGenMiddleware:
         _send_report(secret)
         # Report-only, gateway unreachable, or a crawler this site lets in free: serve the page.
         if not q or q.get("charge_mode") == "off" or not q.get("accepts") or bot.lower() in [b.lower() for b in q.get("free_bots", [])]:
-            return self.get_response(request)
+            return _sign(self.get_response(request), q)
         # Free allowance (AI Terms "free"): this many pages per UTC hour or day for each verified crawler,
         # one whose name AND address match the lists AI companies publish. Counted separately by each
         # worker process: a site running several can give up to that many times the allowance (never less).
@@ -179,13 +210,11 @@ class AIPayGenMiddleware:
                 if k in used or len(used) < 200:
                     used[k] = used.get(k, 0) + 1
                     if used[k] <= fa["requests"]:
-                        return self.get_response(request)
+                        return _sign(self.get_response(request), q)
         quote = {"x402Version": 2, "error": "PAYMENT_REQUIRED",
                  "resource": {"url": request.build_absolute_uri(), "description": q.get("description", ""), "mimeType": "text/html"},
                  "accepts": q["accepts"]}
         resp = HttpResponse(json.dumps(dict(quote, help=q.get("help"))), status=402, content_type="application/json")
         resp["payment-required"] = base64.b64encode(json.dumps(quote).encode()).decode()
         resp["cache-control"] = "no-store"
-        if q.get("terms"):
-            resp["link"] = "<" + q["terms"] + '>; rel="ai-terms"'
-        return resp
+        return _sign(resp, q, page=False)

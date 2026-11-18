@@ -94,10 +94,45 @@ async function aipaygen402(url, bot, path, verified) {
     return new Response(JSON.stringify({ ...quote, help: q.help }), {
       status: 402,
       headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(ascii),
-        // AI Terms: the route's machine-readable terms, which a 402 SHOULD link.
-        ...(typeof q.terms === "string" && /^https:[^\s<>"]+$/.test(q.terms) ? { link: "<" + q.terms + '>; rel="ai-terms"' } : {}) },
+        // AI Terms: the route's machine-readable terms, which a 402 MUST link. (No Content-Usage here: it describes
+        // the content of a message, and a 402 carries the price, not the page.)
+        ...(aipaygenSignals().link ? { link: aipaygenSignals().link } : {}) },
     });
   } catch { return null; } // never let a quote problem break the page
+}
+// What the terms say, in headers crawlers already read: Link rel="ai-terms" and the IETF aipref Content-Usage
+// (e.g. "train-ai=n"). The Link on the 402 and on pages served to AI crawlers; Content-Usage on those pages only.
+// Nothing while report-only.
+function aipaygenSignals() {
+  const q = QUOTE, h = {};
+  if (q && typeof q.terms === "string" && /^https:[^\s<>"]+$/.test(q.terms)) h.link = "<" + q.terms + '>; rel="ai-terms"';
+  if (q && typeof q.content_usage === "string" && /^[a-z-]+=[yn](, [a-z-]+=[yn]){0,5}$/.test(q.content_usage)) h["content-usage"] = q.content_usage;
+  return h;
+}
+// The site's own Content-Usage combined with ours as IETF aipref combines preferences: for each category, n in either
+// is n. The site's other members are kept as they are; categories it doesn't state are added from ours.
+function aipaygenMergeUsage(own, ours) {
+  if (!own) return ours;
+  const mine = {}, out = [];
+  for (const p of ours.split(",")) { const kv = p.trim().split("="); mine[kv[0]] = kv[1]; }
+  for (const p of String(own).split(",")) {
+    const t = p.trim(), k = t.split(/[=;]/)[0];
+    if (!t) continue;
+    if (k in mine) { out.push(mine[k] === "n" ? k + "=n" : t); delete mine[k]; } else out.push(t);
+  }
+  for (const k in mine) out.push(k + "=" + mine[k]);
+  return out.join(", ");
+}
+// The page as served, with those headers added (a Link the site already sends is kept, ours appended).
+function aipaygenSign(res) {
+  const h = aipaygenSignals();
+  if (!res || !Object.keys(h).length) return res;
+  try {
+    const r = new Response(res.body, res);
+    if (h.link && !/rel="?ai-terms/i.test(r.headers.get("link") || "")) r.headers.append("link", h.link);
+    if (h["content-usage"]) r.headers.set("content-usage", aipaygenMergeUsage(r.headers.get("content-usage"), h["content-usage"]));
+    return r;
+  } catch { return res; }
 }
 // Visit counts for your AI crawler report, sent every few minutes in one small request.
 async function aipaygenReport(secret) {
@@ -154,6 +189,7 @@ export default async (req, context) => {
   const u = new URL(req.url);
   if (u.pathname === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return t; }
   // robots.txt is free for every crawler: it is how they learn your rules and find your terms.
+  // Lines to add to it, written from your AI Terms (IETF aipref Content-Usage; training-only crawlers): https://aipaygen.com/v1/gateway/robots/YOUR_ROUTE_ID
   if (u.pathname === "/robots.txt") return;
   // A crawler retrying with a payment: AIPayGen verifies it, fetches the page and settles to your wallet.
   if (req.headers.get("payment-signature") || req.headers.get("x-payment")) return aipaygenForward(req, u);
@@ -167,7 +203,8 @@ export default async (req, context) => {
   }
   const quote = await aipaygen402(req.url, bot, u.pathname, !!named && isAiIp(ip));
   context.waitUntil(aipaygenReport(secret));
-  return quote || undefined;
+  // A crawler let in free still gets the terms Link and Content-Usage with the page.
+  return quote || aipaygenSign(await context.next());
 };
 
 export const config = { path: "/*" };
