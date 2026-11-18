@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.5.0
+Stable tag: 2.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,9 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.5.1 =
+* The 402 answer links your route's AI Terms (Link: rel="ai-terms"), so a crawler can read the terms it is being asked to pay under.
 
 = 2.5.0 =
 * Personal download: the plugin file from your sign-up page on AIPayGen carries your route id and gateway secret, so install is upload and activate. The plugin copies them into its settings once and deletes that file. Without that file, the plugin works as before.

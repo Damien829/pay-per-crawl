@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.5.0
+ * Version:           2.5.1
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -165,6 +165,15 @@ function aipaygen_ppc_quote( $route ) {
 }
 
 /** Answer an unpaid AI crawler with HTTP 402 and the route's price, then stop. Returns (page served) if no quote or the bot is let in free. */
+/**
+ * AI Terms: a 402 should link the terms it is answering under. The route's terms URL comes with the
+ * quote; it is used only when it is a plain https URL (no space, quote or angle bracket), else ''.
+ */
+function aipaygen_ppc_terms_link( $q ) {
+	$terms = is_array( $q ) && isset( $q['terms'] ) && is_string( $q['terms'] ) ? $q['terms'] : '';
+	return preg_match( '#^https:[^\s<>"]+\z#', $terms ) ? '<' . $terms . '>; rel="ai-terms"' : '';
+}
+
 function aipaygen_ppc_local_402( $route, $url, $bot = '', $verified = false ) {
 	$q = aipaygen_ppc_quote( $route );
 	if ( ! $q || ( isset( $q['charge_mode'] ) && 'off' === $q['charge_mode'] ) ) {
@@ -203,6 +212,10 @@ function aipaygen_ppc_local_402( $route, $url, $bot = '', $verified = false ) {
 	header( 'content-type: application/json' );
 	header( 'cache-control: no-store' );
 	header( 'payment-required: ' . base64_encode( wp_json_encode( $quote ) ) );
+	$link = aipaygen_ppc_terms_link( $q );
+	if ( '' !== $link ) {
+		header( 'link: ' . $link );
+	}
 	echo wp_json_encode( array_merge( $quote, array( 'help' => isset( $q['help'] ) ? $q['help'] : null ) ) );
 	exit;
 }
