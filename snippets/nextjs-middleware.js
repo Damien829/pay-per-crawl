@@ -97,7 +97,9 @@ async function aipaygen402(url, bot, path, verified) {
     const ascii = JSON.stringify(quote).replace(/[^\x20-\x7e]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
     return new Response(JSON.stringify({ ...quote, help: q.help }), {
       status: 402,
-      headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(ascii) },
+      headers: { "content-type": "application/json", "cache-control": "no-store", "payment-required": btoa(ascii),
+        // AI Terms: the route's machine-readable terms, which a 402 SHOULD link.
+        ...(typeof q.terms === "string" && /^https:[^\s<>"]+$/.test(q.terms) ? { link: "<" + q.terms + '>; rel="ai-terms"' } : {}) },
     });
   } catch { return null; } // never let a quote problem break the page
 }
