@@ -106,7 +106,7 @@ A client SHOULD send `AI-Purpose: <use>` (one of `search`, `answer`, `training`,
 
 ## 9. Payment
 
-When a use is `paid`, the site (or its payment endpoint) answers HTTP 402 with an x402 v2 quote for that request. The client signs the payment and retries with the `PAYMENT-SIGNATURE` header; the content is returned only after the payment is verified. Settlement goes directly from the client's wallet to the site's wallet.
+When a use is `paid`, the site (or its payment endpoint) answers HTTP 402 with an x402 v2 quote for that request. `payment.endpoint` is an absolute `https` URL: the content at path P is paid for at endpoint + P. A site that answers 402 itself MAY give its own origin. The client signs the payment and retries with the `PAYMENT-SIGNATURE` header; the content is returned only after the payment is verified. Settlement goes directly from the client's wallet to the site's wallet.
 
 ### 9.1 Describing a page before payment
 
@@ -165,5 +165,9 @@ AIPayGen generates terms for every site from its settings (`/v1/gateway/terms/<r
 - **Validator:** <https://aipaygen.com/ai-terms#validate> checks a pasted file or the one a site serves. Programmatically: `POST https://aipaygen.com/ai-terms/validate` with the file as the body, or `{"url": "example.com"}`.
 - **Python reader:** [`readers/python/ai_terms.py`](../readers/python/ai_terms.py): fetch, resolve and validate in one standard-library file; passes every test vector.
 - **Generator:** <https://aipaygen.com/ai-terms#make> writes an allow/deny file for a static site, no account needed.
+
+## 15. Changes
+
+- Clarification (2026-11-18): `payment.endpoint` is an absolute `https` URL (section 9). One published test vector used prose there and was corrected; files that already used a URL are unaffected. Still `"ai_terms": "0.1"`.
 
 Comments and pull requests welcome.

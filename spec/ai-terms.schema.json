@@ -242,7 +242,9 @@
           "type": "integer"
         },
         "endpoint": {
-          "type": "string"
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
         },
         "network": {
           "type": "string"

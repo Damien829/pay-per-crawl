@@ -29,7 +29,7 @@
       "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "allow",
         "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" }, "training": { "access": "allow" }, "agent": { "access": "allow" } },
         "paths": [ { "match": "/data/*", "uses": { "agent": { "access": "paid", "price": { "amount": "0.01", "currency": "USD", "per": "request" } } },
-          "payment": { "protocol": "x402", "endpoint": "the URL itself" } } ] }
+          "payment": { "protocol": "x402", "endpoint": "https://example.com" } } ] }
     },
     {
       "name": "not an object",
@@ -118,6 +118,33 @@
       "valid": false,
       "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-17", "default": "deny",
         "uses": { "search": { "access": "allow", "attribution": "required" }, "answer": { "access": "allow", "attribution": "required" }, "training": { "access": "deny", "free": { "requests": 1000, "per": "week" } }, "agent": { "access": "deny" } } }
+    },
+    {
+      "name": "invalid: payment endpoint is prose, not an https URL",
+      "valid": false,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "paid",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" },
+          "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } },
+          "agent": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } } },
+        "payment": { "protocol": "x402", "version": 2, "endpoint": "the listing URL itself", "network": "eip155:8453", "asset": "USDC" } }
+    },
+    {
+      "name": "invalid: payment endpoint is plain http",
+      "valid": false,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "paid",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" },
+          "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } },
+          "agent": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } } },
+        "payment": { "protocol": "x402", "version": 2, "endpoint": "http://pay.example.com/x", "network": "eip155:8453", "asset": "USDC" } }
+    },
+    {
+      "name": "invalid: payment endpoint ends in a newline",
+      "valid": false,
+      "doc": { "ai_terms": "0.1", "site": "https://example.com", "updated": "2026-11-16", "default": "paid",
+        "uses": { "search": { "access": "allow" }, "answer": { "access": "allow" },
+          "training": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } },
+          "agent": { "access": "paid", "price": { "amount": "0.002", "currency": "USD", "per": "page" } } },
+        "payment": { "protocol": "x402", "version": 2, "endpoint": "https://example.com/\n", "network": "eip155:8453", "asset": "USDC" } }
     }
   ],
   "resolve": {

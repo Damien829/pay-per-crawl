@@ -19,7 +19,7 @@ headers = {"AI-Purpose": "agent"}
 - `allowed_within(rule, max_price_usd)` is the check a careful client makes before reading or paying.
 - `validate(doc)` returns `(errors, warnings)`.
 
-Run `python3 test_vectors.py` to check it against the published [test vectors](../../spec/ai-terms-vectors.json): 25 of 25 pass.
+Run `python3 test_vectors.py` to check it against the published [test vectors](../../spec/ai-terms-vectors.json): 33 of 33 pass.
 
 This is a second implementation of the format, in a different language from the reference one (TypeScript, in the AIPayGen gateway). It has the same author, so it is not yet the independent implementation a standard needs. If you write one, open a pull request and it will be listed here.
 

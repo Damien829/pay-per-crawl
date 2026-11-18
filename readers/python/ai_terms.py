@@ -216,6 +216,8 @@ def validate(doc):
             errors.append('%s.protocol must be "x402" in 0.1.' % where)
         if not isinstance(payment.get("endpoint"), str) or not payment["endpoint"]:
             errors.append("%s.endpoint is required: where a client pays." % where)
+        elif not re.match(r'^https://[^\s<>"]+\Z', payment["endpoint"]):
+            errors.append("%s.endpoint must be an https URL: the content at path P is paid for at endpoint + P." % where)
 
     top_paid = doc.get("default") == "paid"
     unpayable_path = False
