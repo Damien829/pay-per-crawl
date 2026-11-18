@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.4.0
+ * Version:           2.5.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -389,12 +389,41 @@ function aipaygen_ppc_settings_page() {
 	<?php
 }
 
+/**
+ * A personal download (built in the browser on aipaygen.com from this same plugin) adds
+ * aipaygen-setup.php with the site's route id and gateway secret. Copy them into the settings once,
+ * then delete the file. Runs on activation, and on the next admin page for an upload that replaced
+ * an active copy. If the file can't be deleted, its hash is kept so it is never applied twice.
+ */
+function aipaygen_ppc_import_setup() {
+	$file = __DIR__ . '/aipaygen-setup.php';
+	if ( ! file_exists( $file ) ) {
+		return;
+	}
+	$hash = (string) md5_file( $file );
+	if ( get_option( 'aipaygen_ppc_setup_applied', '' ) !== $hash ) {
+		$data   = include $file;
+		$route  = is_array( $data ) && isset( $data['route'] ) ? aipaygen_ppc_sanitize_route( $data['route'] ) : '';
+		$secret = is_array( $data ) && isset( $data['secret'] ) ? aipaygen_ppc_sanitize_secret( $data['secret'] ) : '';
+		if ( '' !== $route && '' !== $secret ) {
+			update_option( 'aipaygen_ppc_route', $route );
+			update_option( 'aipaygen_ppc_secret', $secret );
+			delete_transient( 'aipaygen_ppc_quote' );
+		}
+		update_option( 'aipaygen_ppc_setup_applied', $hash );
+	}
+	wp_delete_file( $file );
+}
+register_activation_hook( __FILE__, 'aipaygen_ppc_import_setup' );
+add_action( 'admin_init', 'aipaygen_ppc_import_setup' );
+
 function aipaygen_ppc_uninstall() {
 	delete_option( 'aipaygen_ppc_route' );
 	delete_option( 'aipaygen_ppc_secret' );
 	delete_transient( 'aipaygen_ppc_ai_ips' );
 	delete_transient( 'aipaygen_ppc_quote' );
 	delete_option( 'aipaygen_ppc_counts' );
+	delete_option( 'aipaygen_ppc_setup_applied' );
 	wp_clear_scheduled_hook( 'aipaygen_ppc_send_counts' );
 }
 register_uninstall_hook( __FILE__, 'aipaygen_ppc_uninstall' );

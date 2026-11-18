@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.4.0
+Stable tag: 2.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -38,7 +38,7 @@ Privacy policy: https://aipaygen.com/privacy
 
 1. Install and activate the plugin.
 2. Create a free route for your site at https://aipaygen.com/pay-per-crawl: your site address and a price per page. Start with "None yet" to only see the report (no wallet needed), or add your wallet address on Base to charge.
-3. In WordPress, go to Settings > AIPayGen pay-per-crawl and paste the route id and gateway secret.
+3. In WordPress, go to Settings > AIPayGen pay-per-crawl and paste the route id and gateway secret. (A download from your sign-up page on https://aipaygen.com already has both: upload and activate, and they are filled in.)
 4. Check it: in report-only mode your report shows AI crawler visits within about an hour. When charging, `curl -i -A GPTBot https://your-site.com/` should answer 402 with your price.
 
 == Frequently Asked Questions ==
@@ -60,6 +60,9 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.5.0 =
+* Personal download: the plugin file from your sign-up page on AIPayGen carries your route id and gateway secret, so install is upload and activate. The plugin copies them into its settings once and deletes that file. Without that file, the plugin works as before.
 
 = 2.4.0 =
 * Free allowance: when your route gives AI crawlers some free pages per hour or day (AI Terms "free"), each verified crawler (its name and its address both on the lists AI companies publish) reads that many free before the price applies.
