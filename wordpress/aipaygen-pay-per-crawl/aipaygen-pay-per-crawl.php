@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.3.1
+ * Version:           2.4.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -95,15 +95,19 @@ function aipaygen_ppc_maybe_charge() {
 		$path = '/';
 	}
 	if ( '' === $sig && '' === $xpay ) {
-		$bot = preg_match( AIPAYGEN_PPC_BOTS, $ua, $m ) ? $m[0] : ( aipaygen_ppc_ai_ip( $ip ) ? 'AI crawler (by IP)' : '' );
+		$named = preg_match( AIPAYGEN_PPC_BOTS, $ua, $m ) ? $m[0] : '';
+		$bot   = '' !== $named ? $named : ( aipaygen_ppc_ai_ip( $ip ) ? 'AI crawler (by IP)' : '' );
 		if ( '' === $bot ) {
 			aipaygen_ppc_watch( $ip, (string) wp_parse_url( $path, PHP_URL_PATH ), $ua );
 			return; // People and search engines browse free.
 		}
 		// Unpaid AI crawler: answer with the price here; it never reaches AIPayGen.
 		aipaygen_ppc_count( $bot, (string) wp_parse_url( $path, PHP_URL_PATH ) );
-		aipaygen_ppc_local_402( $route, home_url( $path ), $bot );
-		return; // No quote available right now: serve the page as usual.
+		// Verified: its name AND its address match the lists AI companies publish. Only verified crawlers
+		// get the site's free allowance, so claiming a crawler's name earns nothing.
+		$verified = '' !== $named && aipaygen_ppc_ai_ip( $ip );
+		aipaygen_ppc_local_402( $route, home_url( $path ), $bot, $verified );
+		return; // No quote, report only, or within the free allowance: serve the page as usual.
 	}
 
 	$headers = array(
@@ -161,7 +165,7 @@ function aipaygen_ppc_quote( $route ) {
 }
 
 /** Answer an unpaid AI crawler with HTTP 402 and the route's price, then stop. Returns (page served) if no quote or the bot is let in free. */
-function aipaygen_ppc_local_402( $route, $url, $bot = '' ) {
+function aipaygen_ppc_local_402( $route, $url, $bot = '', $verified = false ) {
 	$q = aipaygen_ppc_quote( $route );
 	if ( ! $q || ( isset( $q['charge_mode'] ) && 'off' === $q['charge_mode'] ) ) {
 		return; // No quote, or report only: serve the page (the visit is already counted).
@@ -169,6 +173,19 @@ function aipaygen_ppc_local_402( $route, $url, $bot = '' ) {
 	// Bots this site lets in free (its route's settings, e.g. AI search in "training" mode).
 	foreach ( ( isset( $q['free_bots'] ) && is_array( $q['free_bots'] ) ) ? $q['free_bots'] : array() as $free ) {
 		if ( 0 === strcasecmp( (string) $free, (string) $bot ) ) {
+			return;
+		}
+	}
+	// Free allowance (AI Terms "free"): this many pages per UTC hour or day for each verified crawler, then
+	// the price. Counted in a transient that every PHP process shares; two requests at the same moment can
+	// let one extra page in, never fewer.
+	$fa = ( isset( $q['free'] ) && is_array( $q['free'] ) ) ? $q['free'] : null;
+	if ( $verified && $fa && isset( $fa['requests'] ) && (int) $fa['requests'] > 0 ) {
+		$hourly = isset( $fa['per'] ) && 'hour' === $fa['per'];
+		$key    = 'aipaygen_ppc_free_' . md5( strtolower( (string) $bot ) . '|' . gmdate( 'Y-m-d' ) . ( $hourly ? 'T' . gmdate( 'H' ) : '' ) );
+		$used   = (int) get_transient( $key ) + 1;
+		set_transient( $key, $used, $hourly ? 2 * HOUR_IN_SECONDS : 2 * DAY_IN_SECONDS );
+		if ( $used <= (int) $fa['requests'] ) {
 			return;
 		}
 	}

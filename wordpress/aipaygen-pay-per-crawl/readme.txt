@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.3.1
+Stable tag: 2.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,9 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Perplexity, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (ClaudeBot, Bytespider) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.4.0 =
+* Free allowance: when your route gives AI crawlers some free pages per hour or day (AI Terms "free"), each verified crawler (its name and its address both on the lists AI companies publish) reads that many free before the price applies.
 
 = 2.3.1 =
 * Settings page and install steps explain report-only mode. Only real user agents are matched (Google-Extended and Applebot-Extended are robots.txt tokens, not crawlers).
