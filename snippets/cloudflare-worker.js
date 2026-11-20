@@ -63,9 +63,16 @@ async function aipaygenQuote() {
 // verified: the crawler's name AND its address match the lists AI companies publish. Only verified
 // crawlers get the site's free allowance (AI Terms "free"), so claiming a crawler's name earns nothing.
 async function aipaygen402(url, bot, path, verified) {
-  HITS[bot] = (HITS[bot] || 0) + 1; HIT_N++;
-  if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
   const q = await aipaygenQuote();
+  // Counted as "<name> (fake)": a name whose operator publishes its addresses (the quote's checked_bots), from outside
+  // the address list this process has loaded. Never before the list has loaded; names with no published list are
+  // never called fake. One list covers every operator, so a name used from another AI company's addresses still
+  // counts as real: fakes can be under-counted, never over-counted.
+  const checked = !verified && bot !== "AI crawler (by IP)" && typeof AI_NETS !== "undefined" && AI_NETS.length > 0 && q && Array.isArray(q.checked_bots)
+    ? q.checked_bots.find((b) => typeof b === "string" && b.toLowerCase() === String(bot).toLowerCase()) : undefined;
+  const seen = checked ? checked + " (fake)" : bot;
+  HITS[seen] = (HITS[seen] || 0) + 1; HIT_N++;
+  if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
   if (!q || q.charge_mode === "off") return null; // report only: count the visit, serve the page
   // Bots this site lets in free (its route's settings, e.g. AI search in "training" mode): serve the page.
   if ((q.free_bots || []).some((b) => b.toLowerCase() === String(bot).toLowerCase())) return null;
@@ -83,7 +90,9 @@ async function aipaygen402(url, bot, path, verified) {
     }
   }
   try {
-    const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts };
+    const quote = { x402Version: 2, error: "PAYMENT_REQUIRED", resource: { url, description: q.description, mimeType: "text/html" }, accepts: q.accepts,
+      // The quote's x402 v2 extensions (AI Terms, ask before you buy), kept where the official SDK keeps them.
+      ...(q.extensions && typeof q.extensions === "object" ? { extensions: q.extensions } : {}) };
     // The header is base64 of plain ASCII, so an accent, a dash or an emoji in a name can't break it.
     const ascii = JSON.stringify(quote).replace(/[^\x20-\x7e]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
     return new Response(JSON.stringify({ ...quote, help: q.help }), {

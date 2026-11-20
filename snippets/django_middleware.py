@@ -175,7 +175,7 @@ class AIPayGenMiddleware:
             except Exception:
                 return self.get_response(request)
             resp = HttpResponse(body, status=status)
-            for k in ("content-type", "payment-required", "payment-response", "ai-purpose", "link", "content-usage"):
+            for k in ("content-type", "payment-required", "payment-response", "ai-purpose", "link", "content-usage", "x-aipaygen-charged", "x-aipaygen-delivery"):
                 if headers.get(k):
                     resp[k] = headers[k]
             return resp
@@ -185,13 +185,21 @@ class AIPayGenMiddleware:
         bot = named.group(0) if named else ("AI crawler (by IP)" if _ai_ip(_client_ip(request)) else None)
         if not bot:
             return self.get_response(request)
+        # Counted as "<name> (fake)": a name whose operator publishes its addresses (the quote's checked_bots), from
+        # outside the address list this process has loaded. Never before the list has loaded; names with no published
+        # list are never called fake. One list covers every operator, so a name used from another AI company's
+        # addresses still counts as real: fakes can be under-counted, never over-counted.
+        q = _quote()
+        seen = bot
+        checked = (q or {}).get("checked_bots") if isinstance(q, dict) else None
+        if named and isinstance(checked, list) and _state["nets"] and not _ai_ip(_client_ip(request)):
+            seen = next((b + " (fake)" for b in checked if isinstance(b, str) and b.lower() == bot.lower()), bot)
         with _lock:
-            _state["hits"][bot] = _state["hits"].get(bot, 0) + 1
+            _state["hits"][seen] = _state["hits"].get(seen, 0) + 1
             p = request.path[:200]
             if p in _state["paths"] or len(_state["paths"]) < 300:
                 _state["paths"][p] = _state["paths"].get(p, 0) + 1
             _state["n"] += 1
-        q = _quote()
         _send_report(secret)
         # Report-only, gateway unreachable, or a crawler this site lets in free: serve the page.
         if not q or q.get("charge_mode") == "off" or not q.get("accepts") or bot.lower() in [b.lower() for b in q.get("free_bots", [])]:
@@ -214,6 +222,9 @@ class AIPayGenMiddleware:
         quote = {"x402Version": 2, "error": "PAYMENT_REQUIRED",
                  "resource": {"url": request.build_absolute_uri(), "description": q.get("description", ""), "mimeType": "text/html"},
                  "accepts": q["accepts"]}
+        # The quote's x402 v2 extensions (AI Terms, ask before you buy), kept where the official SDK keeps them.
+        if isinstance(q.get("extensions"), dict) and q["extensions"]:
+            quote["extensions"] = q["extensions"]
         resp = HttpResponse(json.dumps(dict(quote, help=q.get("help"))), status=402, content_type="application/json")
         resp["payment-required"] = base64.b64encode(json.dumps(quote).encode()).decode()
         resp["cache-control"] = "no-store"
