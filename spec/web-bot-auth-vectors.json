@@ -1,0 +1,143 @@
+{
+  "about": "Web Bot Auth test vectors (draft-ietf-webbotauth-httpsig-protocol). Each request was signed by a TEST-ONLY key; `now` is the verifier's clock in seconds. `gateway` is what the AIPayGen gateway answers with the directory given. `snippet` is what a site snippet answers with the same keys as its hourly key map (https://aipaygen.com/v1/signed_agents): a key it doesn't know may be newer than its map, so it is unchecked (fall back to IP rules), never fake.",
+  "now": 1795000000,
+  "max_skew_s": 300,
+  "directory": {
+    "host": "signer.example",
+    "keys": [
+      {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "PM0kHP_Js2GARLl9A22GFFk9iwF8NA8d7odzOFUXZUs"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "good",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1794999990;expires=1795000050;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:VYzOjEj3Tro7BRzqWPt88+IJ/03o84T1WxWP5PQrkJvcqxRhW68tRO8yL7VOCZ5bD3EO9lTXXt1qcHhgiszwBw==:"
+        }
+      },
+      "gateway": "verified",
+      "snippet": "verified"
+    },
+    {
+      "name": "signed for another site (wrong @authority)",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1794999990;expires=1795000050;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:QlkVVF6O1ijtyEY3SGI9rSXH3aMJUDMTpqCvlhbv0jTR5J15IV9h+U2E+vYymJ6zcM+7tJ+kM7hrn75+DYHxAg==:"
+        }
+      },
+      "gateway": "invalid:bad signature",
+      "snippet": "invalid:bad signature"
+    },
+    {
+      "name": "signature bytes changed",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1794999990;expires=1795000050;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:VIzOjEj3Tro7BRzqWPt88+IJ/03o84T1WxWP5PQrkJvcqxRhW68tRO8yL7VOCZ5bD3EO9lTXXt1qcHhgiszwBw==:"
+        }
+      },
+      "gateway": "invalid:bad signature",
+      "snippet": "invalid:bad signature"
+    },
+    {
+      "name": "signed by a key that isn't in the directory",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1794999990;expires=1795000050;keyid=\"_M4oo4KIoHmaTIzzxRq82GlEGwn9tVpXTWy2LjbG6zQ\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:xtLHk2KQfXGU/yaIyZjkxV0p/Z6n7SRXhCOGsuNRpbBaVdjfD85uaNPcOAqzdLsj2v7gKPViSWYFWySaS4w1Cw==:"
+        }
+      },
+      "gateway": "invalid:unknown key",
+      "snippet": "unchecked"
+    },
+    {
+      "name": "expired more than 300 s ago",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1794999600;expires=1794999699;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:fn2J9dNrkOXhX9bM2NAQYYEzxHuTau2WhoVYcJGUHnc2MN9hpVXK157au+xvGF7XgHo89DFz4Xqeg5vMGDxkCQ==:"
+        }
+      },
+      "gateway": "invalid:expired",
+      "snippet": "invalid:expired"
+    },
+    {
+      "name": "expired exactly 300 s ago (inside the skew)",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1794999600;expires=1794999700;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:IBZaN/U8BtGJ+4VDTy+mCAsq+ACC99q+Zc1HwDj0aKMQ2dPUm0gwstnKks4CdO9ra5HWwZ/5OQofbdBgbZuPDQ==:"
+        }
+      },
+      "gateway": "verified",
+      "snippet": "verified"
+    },
+    {
+      "name": "created more than 300 s ahead",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1795000301;expires=1795000400;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:j0ebAnlAP0ayraNYW8XMC76AOl8KPAj33gOOEblE88gwObMbaF0nXKBH/WHSiYhUcxRm5c8LQ6zhyG/0qvE/AA==:"
+        }
+      },
+      "gateway": "invalid:not yet valid",
+      "snippet": "invalid:not yet valid"
+    },
+    {
+      "name": "created exactly 300 s ahead (inside the skew)",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1795000300;expires=1795000400;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:ZVjHP2pUhGsem56Uee9Quk/p2PZcHglqenvL5H7pMfUHJOe1dZa/0zFYs4urB8E4R/OLqOHEDtvMz6s8cmWDDg==:"
+        }
+      },
+      "gateway": "verified",
+      "snippet": "verified"
+    },
+    {
+      "name": "expires not after created",
+      "request": {
+        "url": "https://site.example/blog/post",
+        "method": "GET",
+        "headers": {
+          "signature-agent": "\"https://signer.example\"",
+          "signature-input": "sig1=(\"@authority\" \"signature-agent\");created=1794999990;expires=1794999990;keyid=\"Zny1OXv_VkAJJz15ju5CGax-JwRxFYACzIycjfMfY7Q\";alg=\"ed25519\";tag=\"web-bot-auth\"",
+          "signature": "sig1=:9Zxh+vxCL+D1lpdaUNn7q1ORseoyY+e8s+CPbuDvDzUJYp94u1hz2urGX+RAa2q6IR28YymMjaIxa7C/M3nYCQ==:"
+        }
+      },
+      "gateway": "invalid:expired",
+      "snippet": "invalid:expired"
+    }
+  ]
+}

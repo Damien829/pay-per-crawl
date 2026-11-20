@@ -24,6 +24,12 @@ AI Terms is a file a website publishes at /.well-known/ai-terms that says, for e
 
 For implementers: a [JSON Schema](spec/ai-terms.schema.json), [test vectors](spec/ai-terms-vectors.json) for validation and path matching, a [Python reader](readers/python/) (one file, standard library only), a [validator](https://aipaygen.com/ai-terms#validate) and a no-account [file generator](https://aipaygen.com/ai-terms#make). The format is also an IETF Internet-Draft: [draft-ovalles-ai-terms](https://datatracker.ietf.org/doc/draft-ovalles-ai-terms/).
 
+### Web Bot Auth test vectors
+
+[`spec/web-bot-auth-vectors.json`](spec/web-bot-auth-vectors.json) holds 9 signed requests for anyone verifying [Web Bot Auth](https://datatracker.ietf.org/doc/draft-ietf-webbotauth-httpsig-protocol/) signatures (Ed25519, RFC 9421, tagged `web-bot-auth`, covering `@authority` and `signature-agent`): a valid one, one signed for another site, a changed signature, a key that isn't in the directory, expired and not-yet-valid ones, and both edges of the 300-second clock skew. Each case gives two expected verdicts: one for a verifier that reads the agent's key directory (the AIPayGen gateway), and one for a site integration that uses an hourly copy of the keys, where a key it doesn't hold is "unchecked", never forged.
+
+They are signed with a **test-only key** for the made-up host `signer.example`. Its seed is in [`spec/gen-web-bot-auth-vectors.mjs`](spec/gen-web-bot-auth-vectors.mjs) on purpose, so anyone can regenerate the file (`node spec/gen-web-bot-auth-vectors.mjs`; Node only, no dependencies; Ed25519 is deterministic, so the output is identical). Never use that key for anything else.
+
 ## Setup
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Damien829/pay-per-crawl/tree/main/cloudflare-worker)
