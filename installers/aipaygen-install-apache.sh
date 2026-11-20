@@ -22,7 +22,10 @@
 # visit so your report shows a first count.
 set -eu
 umask 022
-R="${AIPAYGEN_TEST_ROOT:-}"     # only the installer's own tests set this (a scratch folder standing in for /)
+# Only the installer's own tests use a scratch folder standing in for /: they set both variables. Anything else (a root
+# shell or sudo -E keeping a caller's environment) is ignored, so this always works on the real /.
+R=""
+if [ "${AIPAYGEN_TEST:-}" = 1 ]; then R="${AIPAYGEN_TEST_ROOT:-}"; fi
 KIND="apache"
 API="https://aipaygen.com"
 HOST_CHECK="apachectl configtest"
@@ -43,6 +46,8 @@ LOGDIR="$R/var/log/aipaygen"; LOGF="$LOGDIR/install.log"
 CRON="$R/etc/cron.d/aipaygen"
 MARK="# aipaygen: AI crawler report (remove with: sh aipaygen-install.sh --uninstall)"
 say() { printf '%s\n' "$*"; }
+# Paths as they are on the real server: the test folder taken off, only when there is one (sed refuses an empty pattern).
+unroot() { if [ -n "$R" ]; then printf '%s' "$1" | sed "s#$R##g"; else printf '%s' "$1"; fi; }
 # The log exists only once this installer has started changing things (a refusal before that leaves no trace).
 log() { [ -d "$LOGDIR" ] && [ "$DRY" != 1 ] && printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOGF" 2>/dev/null || true; }
 die() { say "aipaygen: $*" >&2; log "stopped: $*"; exit 1; }
@@ -164,13 +169,17 @@ fi
 BLOCKS="$(find_blocks)"
 N="$(printf '%s' "$BLOCKS" | grep -c . || true)"
 if [ "$MODE" = install ]; then
-  [ "$N" = 1 ] || manual "Found $N site blocks for $HOST (only one can be changed automatically)."
+  if [ "$N" = 0 ]; then
+    manual "Found no site block that serves $HOST: no server_name (nginx) or ServerName/ServerAlias (Apache) line names it exactly, in $(unroot "$SITES"). A block that only redirects (like certbot's port-80 one) doesn't count, and braces inside quoted strings can hide a block from this check."
+  elif [ "$N" != 1 ]; then
+    manual "Found $N site blocks that serve $HOST, and only one can be changed automatically: $(printf '%s' "$BLOCKS" | awk -v r="$R" '{ f = $1; sub("^" r, "", f); printf "%s%s line %s", (NR > 1 ? ", " : ""), f, $2 }')."
+  fi
   SITE_FILE="$(printf '%s' "$BLOCKS" | awk '{ print $1 }')"; SITE_LINE="$(printf '%s' "$BLOCKS" | awk '{ print $2 }')"; SITE_ALOG="$(printf '%s' "$BLOCKS" | awk '{ print $3 }')"
 fi
 
 say "AIPayGen pay-per-crawl ($KIND), route $ROUTE, site $HOST."
 if [ "$DRY" = 1 ]; then
-  say "Would write: /etc/aipaygen/secret, $(printf '%s' "$OURS" | sed "s#$R##g"), ${REPORT#$R}, /etc/cron.d/aipaygen"
+  say "Would write: /etc/aipaygen/secret, $(unroot "$OURS"), ${REPORT#$R}, /etc/cron.d/aipaygen"
   [ "$MODE" = install ] && say "Would add after line $SITE_LINE of ${SITE_FILE#$R}:  $INC_SITE"
   say "Then: $HOST_CHECK, and a reload. (Dry run: nothing changed.)"
   exit 0
