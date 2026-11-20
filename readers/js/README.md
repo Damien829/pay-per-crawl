@@ -1,6 +1,6 @@
 # ai-terms: AI Terms reader for JavaScript and TypeScript
 
-No dependencies. Runs in Node 18+, Deno, Bun, browsers and edge runtimes. MIT.
+No dependencies. Runs in Node 18+, Deno, Bun and edge runtimes. MIT. fetchTerms in a browser needs the site to allow cross-origin reads; everything else runs anywhere.
 
 [AI Terms](https://aipaygen.com/ai-terms) is a JSON file a site publishes at `/.well-known/ai-terms` that says, for each use of its content by AI (search, answer, training, agent), whether that use is allowed, allowed for a price, or not allowed. It is a draft ([draft-ovalles-ai-terms](https://datatracker.ietf.org/doc/draft-ovalles-ai-terms/)), not a standard.
 
@@ -24,6 +24,6 @@ const headers = { "AI-Purpose": "agent" };
 - `validate(doc, { origin })` returns `{ valid, errors, warnings }`.
 - `parse(text)`, `termsLink(linkHeader)`, `globMatch`, `normalizePath` are exported too.
 
-`npm test` builds the package and runs it against the published [test vectors](../../spec/ai-terms-vectors.json): 58 of 58 pass.
+`npm test` builds the package and runs it against the published [test vectors](https://github.com/Damien829/pay-per-crawl/blob/main/spec/ai-terms-vectors.json): 58 of 58 pass.
 
-This is the matching, resolution, validation and AI Preferences code of the reference implementation (TypeScript, in the AIPayGen gateway), published as a library. It has the same author as the reference and the [Python reader](../python), so it is not an independent implementation. If you write one, open a pull request and it will be listed here.
+This is the matching, resolution, validation and AI Preferences code of the reference implementation (TypeScript, in the AIPayGen gateway), published as a library. It has the same author as the reference and the [Python reader](https://github.com/Damien829/pay-per-crawl/blob/main/readers/python), so it is not an independent implementation. If you write one, open a pull request and it will be listed here.

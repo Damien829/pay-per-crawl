@@ -1,6 +1,7 @@
 /**
- * AI Terms 0.1 reader for JavaScript and TypeScript. No dependencies; runs in Node 18+, Deno, Bun, browsers and
- * edge runtimes (it needs only fetch, URL and TextEncoder).
+ * AI Terms 0.1 reader for JavaScript and TypeScript. No dependencies; runs in Node 18+, Deno, Bun and edge runtimes
+ * (it needs only fetch, URL and TextEncoder). fetchTerms in a browser needs the site to allow cross-origin reads;
+ * everything else runs anywhere.
  *
  * AI Terms (https://aipaygen.com/ai-terms, draft-ovalles-ai-terms) is a JSON file at /.well-known/ai-terms where a
  * site says, per use, what AI may do with its pages: allow, paid (with a price) or deny.
