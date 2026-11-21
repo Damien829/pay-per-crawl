@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling==1.27.0"]  # writes Metadata 2.4, which PyPI and twine accept
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-terms"
+dynamic = ["version"]
+description = "Read AI Terms files (/.well-known/ai-terms): what a site allows AI to do with its pages, per use, and at what price. One module, standard library only."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Damien Ovalles (AIPayGen)" }]
+requires-python = ">=3.8"
+keywords = ["ai-terms", "ai", "crawler", "robots", "aipref", "x402", "licensing"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://aipaygen.com/ai-terms"
+Source = "https://github.com/Damien829/pay-per-crawl/tree/main/readers/python"
+
+[tool.hatch.version]
+path = "ai_terms.py"
+pattern = "^__version__ = \"(?P<version>[^\"]+)\""
+
+[tool.hatch.build.targets.wheel]
+only-include = ["ai_terms.py"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["ai_terms.py", "LICENSE", "README.md", "pyproject.toml"]

@@ -1,6 +1,8 @@
 # AI Terms reader for Python
 
-One file, standard library only, no AIPayGen dependency. Copy `ai_terms.py` into your project.
+One module, standard library only, no AIPayGen dependency, Python 3.8 or later. MIT. Copy `ai_terms.py` into your project.
+
+[AI Terms](https://aipaygen.com/ai-terms) is a JSON file a site publishes at `/.well-known/ai-terms` that says, for each use of its content by AI (search, answer, training, agent), whether that use is allowed, allowed for a price, or not allowed. It is a draft ([draft-ovalles-ai-terms](https://datatracker.ietf.org/doc/draft-ovalles-ai-terms/)), not a standard.
 
 ```python
 import ai_terms
@@ -19,7 +21,7 @@ headers = {"AI-Purpose": "agent"}
 - `allowed_within(rule, max_price_usd)` is the check a careful client makes before reading or paying.
 - `validate(doc)` returns `(errors, warnings)`.
 
-Run `python3 test_vectors.py` to check it against the published [test vectors](../../spec/ai-terms-vectors.json): 58 of 58 pass.
+From a checkout of the [repository](https://github.com/Damien829/pay-per-crawl), run `python3 readers/python/test_vectors.py` to check it against the published [test vectors](https://github.com/Damien829/pay-per-crawl/blob/main/spec/ai-terms-vectors.json): 58 of 58 pass.
 
 This is a second implementation of the format, in a different language from the reference one (TypeScript, in the AIPayGen gateway). It has the same author, so it is not yet the independent implementation a standard needs. If you write one, open a pull request and it will be listed here.
 

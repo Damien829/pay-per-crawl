@@ -26,7 +26,8 @@ import urllib.request
 from datetime import date
 from urllib.parse import urlsplit
 
-VERSION = "0.1"
+VERSION = "0.1"  # the AI Terms format version this reader implements
+__version__ = "0.1.0"  # this package's version (PyPI "ai-terms", matching npm "ai-terms")
 USES = ("search", "answer", "training", "agent")
 ACCESS = ("allow", "paid", "deny")
 MAX_BYTES = 100_000
