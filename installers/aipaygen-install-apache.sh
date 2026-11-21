@@ -164,6 +164,11 @@ else
   for mod in rewrite headers setenvif; do
     printf '%s' "$mods" | grep -q "${mod}_module" || manual "Apache's $mod module is off. Turn it on first (sudo a2enmod $mod), then run this again."
   done
+  # A paying crawler's retry reaches AIPayGen only through these; without them it gets the price again (402), so the
+  # report still works and nothing is given away free, but nothing can be earned. Said now, not a reason to stop.
+  off=""
+  for mod in proxy proxy_http ssl; do printf '%s' "$mods" | grep -q "${mod}_module" || off="$off $mod"; done
+  if [ -n "$off" ]; then say "Note: to be paid later, also turn on Apache's${off} module(s): sudo a2enmod proxy proxy_http ssl (until then a paying crawler gets your price again, never your page for free)."; fi
 fi
 
 BLOCKS="$(find_blocks)"
@@ -446,11 +451,28 @@ RewriteRule ^ - [R=402,L]
   SSLProxyEngine on
 </IfModule>
 <IfModule mod_proxy_http.c>
+<IfModule mod_ssl.c>
   RewriteCond %{HTTP:X-AIPayGen-Gateway-Secret} !=${AIPAYGEN_SECRET}
   RewriteCond %{REQUEST_URI} !^/(robots\.txt|\.well-known/ai-terms)$
   RewriteCond %{HTTP:Payment-Signature}%{HTTP:X-Payment} .
   RewriteCond /var/lib/aipaygen/charging -f
   RewriteRule ^/?(.*)$ https://aipaygen.com/g/__AIPAYGEN_ROUTE__/$1 [P,L,QSA]
+</IfModule>
+</IfModule>
+# Without those modules a paid retry can't reach AIPayGen: it gets the price again, never the page for free.
+<IfModule !mod_proxy_http.c>
+  RewriteCond %{HTTP:X-AIPayGen-Gateway-Secret} !=${AIPAYGEN_SECRET}
+  RewriteCond %{REQUEST_URI} !^/(robots\.txt|\.well-known/ai-terms|__aipaygen_402)$
+  RewriteCond %{HTTP:Payment-Signature}%{HTTP:X-Payment} .
+  RewriteCond /var/lib/aipaygen/charging -f
+  RewriteRule ^ - [R=402,L]
+</IfModule>
+<IfModule !mod_ssl.c>
+  RewriteCond %{HTTP:X-AIPayGen-Gateway-Secret} !=${AIPAYGEN_SECRET}
+  RewriteCond %{REQUEST_URI} !^/(robots\.txt|\.well-known/ai-terms|__aipaygen_402)$
+  RewriteCond %{HTTP:Payment-Signature}%{HTTP:X-Payment} .
+  RewriteCond /var/lib/aipaygen/charging -f
+  RewriteRule ^ - [R=402,L]
 </IfModule>
 AIPAYGEN_EOF
 

@@ -5,8 +5,8 @@
   "main": "src/index.js",
   "compatibility_date": "2025-09-01",
   "workers_dev": false,
-  "vars": {
-    // Your route id from https://aipaygen.com/pay-per-crawl#signup (12 characters).
-    "AIPAYGEN_ROUTE": ""
-  }
+  // Set AIPAYGEN_ROUTE (your route id from https://aipaygen.com/pay-per-crawl#signup) and the secret AIPAYGEN_SECRET in
+  // Workers > this worker > Settings > Variables and Secrets. They're deliberately not in "vars" here, and keep_vars
+  // keeps the dashboard's values, so deploying again (every push, with Workers Builds) never resets them.
+  "keep_vars": true
 }

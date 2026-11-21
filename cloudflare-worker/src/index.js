@@ -2,10 +2,10 @@
 //   AIPAYGEN_ROUTE   your route id from https://aipaygen.com/pay-per-crawl#signup
 //   AIPAYGEN_SECRET  the gateway_secret you got with it (a secret, never shown again)
 // Then add a route for your site (Workers > your worker > Settings > Domains & Routes: example.com/*).
-let AIPAYGEN = "https://aipaygen.com", ROUTE = "", GATEWAY = ""; // set from env on the first request
+let AIPAYGEN = "https://aipaygen.com", ROUTE = "", GATEWAY = "", WARNED = false; // set from env on the first request
 const AI_BOTS = /GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta\-externalagent|FacebookBot|cohere\-ai|Diffbot|YouBot|MistralAI\-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot/i;
-// AI crawlers that hide their name are caught by address: the IP lists OpenAI, Anthropic, Perplexity,
-// Mistral, DuckDuckGo and Common Crawl publish, collected daily at https://aipaygen.com/v1/ai_bot_ips
+// AI crawlers that hide their name are caught by address: the IP lists OpenAI, Perplexity, DuckDuckGo, Common Crawl, Anthropic, Mistral and Amazon
+// publish, collected daily at https://aipaygen.com/v1/ai_bot_ips
 let AI_NETS = [], AI_NETS_AT = 0;
 async function aiNetsLoad() {
   try {
@@ -64,7 +64,9 @@ async function aipaygenQuote() {
 }
 // verified: the crawler's name AND its address match the lists AI companies publish. Only verified
 // crawlers get the site's free allowance (AI Terms "free"), so claiming a crawler's name earns nothing.
-async function aipaygen402(url, bot, path, verified) {
+// opts.signed: a Web Bot Auth signature checked here (aipaygenWba); it gets the allowance only where the route turns
+// that on (quote signed_free === true; anything else is off). opts.fake: a signature that failed for a known agent key.
+async function aipaygen402(url, bot, path, verified, opts) {
   const q = await aipaygenQuote();
   // Counted as "<name> (fake)": a name whose operator publishes its addresses (the quote's checked_bots), from outside
   // the address list this process has loaded. Never before the list has loaded; names with no published list are
@@ -72,7 +74,7 @@ async function aipaygen402(url, bot, path, verified) {
   // counts as real: fakes can be under-counted, never over-counted.
   const checked = !verified && bot !== "AI crawler (by IP)" && typeof AI_NETS !== "undefined" && AI_NETS.length > 0 && q && Array.isArray(q.checked_bots)
     ? q.checked_bots.find((b) => typeof b === "string" && b.toLowerCase() === String(bot).toLowerCase()) : undefined;
-  const seen = checked ? checked + " (fake)" : bot;
+  const seen = opts && opts.fake ? bot + " (fake)" : checked ? checked + " (fake)" : bot;
   HITS[seen] = (HITS[seen] || 0) + 1; HIT_N++;
   if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
   if (!q || q.charge_mode === "off") return null; // report only: count the visit, serve the page
@@ -82,7 +84,7 @@ async function aipaygen402(url, bot, path, verified) {
   // Counted separately by each server process or serverless instance: a site running several can give up to
   // that many times the allowance (never less), because the counts are not shared between them.
   const fa = q.free;
-  if (verified && fa && fa.requests > 0) {
+  if ((verified || (opts && opts.signed && q.signed_free === true)) && fa && fa.requests > 0) {
     const win = new Date().toISOString().slice(0, fa.per === "hour" ? 13 : 10);
     if (win !== FREE_WIN) { FREE_WIN = win; FREE_USED = {}; }
     const k = String(bot).toLowerCase();
@@ -180,10 +182,144 @@ function aipaygenWatch(ip, path, ua, secret) {
   if (s[1] === lim.pages) { f.times++; FAST_N++; }
   return flush(); // sent with the next batch (every few minutes), never per visit
 }
+const WBA_ENABLED = true; // signed AI agents, checked here with our hourly key list (see below)
+// Signed AI agents (Web Bot Auth, IETF draft): an agent that signs its requests is counted under its own name, and a
+// signature that fails for a key we know is counted as fake. Keys come from AIPayGen's hourly list of agents we can
+// identify (that's not an endorsement); this code never fetches an agent's own address. A key newer than the list is
+// "unchecked": the usual name and address rules apply, never "fake".
+// Replay: a captured valid signature can be sent again, from any address, until it expires (at most about 5 minutes
+// past its own expiry). Processes can't share a list of seen signatures, so a replay counts as that agent again. That
+// only affects counts, and the free allowance (if the site turns it on for signed agents) is capped per hour or day.
+let WBA_KEYS = null, WBA_AT = 0, WBA_EARLY = 0;
+const WBA_SKEW = 300;
+function wbaLoad(early, wait) {
+  const now = Date.now();
+  if (!(now - WBA_AT > 36e5 || (early && now - WBA_EARLY > 3e5))) return;
+  if (early) WBA_EARLY = now;
+  WBA_AT = Math.max(WBA_AT, now - 36e5 + 3e5); // one refresh at a time; if it fails, try again in 5 minutes
+  const p = fetch(AIPAYGEN + "/v1/signed_agents", { signal: AbortSignal.timeout(3000) }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    if (j && j.agents && typeof j.agents === "object") { WBA_KEYS = j.agents; WBA_AT = Date.now(); }
+  }).catch(() => {});
+  if (wait) try { wait(p); } catch {}
+}
+function wbaStr(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (s.length < 2 || s[0] !== '"' || s[s.length - 1] !== '"') return null;
+  let out = "";
+  for (let i = 1; i < s.length - 1; i++) {
+    const c = s[i], code = c.charCodeAt(0);
+    if (code < 0x20 || code > 0x7e) return null;
+    if (c === "\\") { const n = s[++i]; if (n !== '"' && n !== "\\") return null; out += n; }
+    else if (c === '"') return null;
+    else out += c;
+  }
+  return out;
+}
+function wbaInput(header) {
+  if (!header || header.length > 4096) return null;
+  const members = [];
+  let depth = 0, quote = false, start = 0;
+  for (let i = 0; i < header.length; i++) {
+    const c = header[i];
+    if (quote) { if (c === "\\") i++; else if (c === '"') quote = false; continue; }
+    if (c === '"') quote = true; else if (c === "(") depth++; else if (c === ")") depth--; else if (c === "," && depth === 0) { members.push(header.slice(start, i)); start = i + 1; }
+  }
+  members.push(header.slice(start));
+  for (const m of members) {
+    const eq = m.indexOf("=");
+    if (eq < 1) continue;
+    const label = m.slice(0, eq).trim(), raw = m.slice(eq + 1).trim();
+    if (!/^[a-z*][a-z0-9_.*-]*$/.test(label) || raw[0] !== "(") continue;
+    const close = raw.indexOf(")");
+    if (close < 0) continue;
+    const components = [...raw.slice(1, close).matchAll(/"([^"\\]*)"/g)].map((x) => x[1]);
+    const params = {};
+    for (const p of raw.slice(close + 1).split(";").map((x) => x.trim()).filter(Boolean)) {
+      const k = p.indexOf("=");
+      if (k < 1) continue;
+      const name = p.slice(0, k), val = p.slice(k + 1);
+      if (/^-?\d{1,15}$/.test(val)) params[name] = Number(val);
+      else { const sv = wbaStr(val); if (sv !== null) params[name] = sv; }
+    }
+    if (params.tag === "web-bot-auth") return { label, components, params, raw };
+  }
+  return null;
+}
+function wbaSig(header, label) {
+  if (!header) return null;
+  const m = new RegExp("(?:^|,)\\s*" + label.replace(/[.*]/g, "\\$&") + "=:([A-Za-z0-9+/=]{1,1000}):").exec(header);
+  if (!m) return null;
+  try { return Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0)); } catch { return null; }
+}
+function wbaBase(url, method, get, input) {
+  const u = new URL(url), lines = [];
+  for (const c of input.components) {
+    let v;
+    if (c === "@authority") v = u.host.toLowerCase();
+    else if (c === "@method") v = String(method || "GET").toUpperCase();
+    else if (c === "@path") v = u.pathname || "/";
+    else if (c === "@target-uri") v = u.toString();
+    else if (c === "@scheme") v = u.protocol.replace(":", "");
+    else if (c === "@query") v = u.search || "?";
+    else if (c[0] === "@") return null;
+    else { const h = get(c); v = h == null ? null : String(h).trim(); }
+    if (v == null) return null;
+    lines.push('"' + c + '": ' + v);
+  }
+  lines.push('"@signature-params": ' + input.raw);
+  return lines.join("\n");
+}
+async function wbaEd25519(x, data, sig) {
+  const key = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "Ed25519", x }, { name: "Ed25519" }, false, ["verify"]);
+  return crypto.subtle.verify({ name: "Ed25519" }, key, sig, data);
+}
+// The verdict for a request, as lane E's shared vectors define it ("none", "verified", "unchecked", "invalid:<why>"),
+// with the agent's name and whether its key is in our list (only then can a failure be called fake).
+async function aipaygenWba(url, method, getHeader, wait, nowMs) {
+  // Every header this reads is capped at 4096 characters: a longer one is treated as absent.
+  const get = (h) => { const v = getHeader(h); return v == null ? null : String(v).length > 4096 ? null : String(v); };
+  const input = wbaInput(get("signature-input")), agent = wbaStr(get("signature-agent"));
+  if (!input || !agent || !input.components.includes("@authority") || !input.components.includes("signature-agent")) return { v: "none" };
+  const { created, expires, keyid, alg } = input.params;
+  if (typeof created !== "number" || typeof expires !== "number" || typeof keyid !== "string" || !keyid || (alg !== undefined && alg !== "ed25519")) return { v: "none" };
+  let host;
+  try { const a = new URL(agent); if (a.protocol !== "https:" || (a.port && a.port !== "443") || a.username || a.password) return { v: "none" }; host = a.hostname.toLowerCase(); } catch { return { v: "none" }; }
+  const sig = wbaSig(get("signature"), input.label);
+  if (!sig) return { v: "none" };
+  wbaLoad(false, wait);
+  const entry = WBA_KEYS && Object.prototype.hasOwnProperty.call(WBA_KEYS, host) ? WBA_KEYS[host] : null;
+  const k = entry && Array.isArray(entry.keys) ? entry.keys.find((x) => x && x.kid === keyid && typeof x.x === "string") : null;
+  const bot = entry && typeof entry.bot === "string" && /^[A-Za-z0-9 ._()-]{1,40}$/.test(entry.bot) ? entry.bot : null;
+  const known = !!(k && bot);
+  const t = Math.floor((nowMs || Date.now()) / 1000);
+  if (created > t + WBA_SKEW) return { v: "invalid:not yet valid", bot, known };
+  if (expires < t - WBA_SKEW || expires <= created) return { v: "invalid:expired", bot, known };
+  if (!k) { if (entry) wbaLoad(true, wait); return { v: "unchecked", bot, known: false }; } // a key newer than our list
+  const base = wbaBase(url, method, get, input);
+  if (!base) return { v: "none" };
+  let ok = false;
+  try { ok = await (typeof WBA_ED25519 === "function" ? WBA_ED25519 : wbaEd25519)(k.x, new TextEncoder().encode(base), sig); } catch { ok = false; }
+  return ok ? { v: "verified", bot, known } : { v: "invalid:bad signature", bot, known };
+}
+// What a snippet does with the verdict: a known agent signing correctly is that agent; a failure for a known key is
+// "<agent> (fake)"; anything else changes nothing (the usual name and address rules).
+function aipaygenSigned(w) {
+  if (w && w.known && w.v === "verified") return { bot: w.bot, signed: true };
+  if (w && w.known && w.v.startsWith("invalid:")) return { bot: w.bot, fake: true };
+  return null;
+}
+async function aipaygenUnset(req) {
+  if (!WARNED) { WARNED = true; console.warn("aipaygen: AIPAYGEN_ROUTE is empty, so this Worker passes every request through without counting or charging. Set it in Workers > this worker > Settings > Variables and Secrets."); }
+  const r = await fetch(req);
+  if (r.status === 101) return r;
+  const out = new Response(r.body, r);
+  out.headers.set("x-aipaygen-setup", "missing AIPAYGEN_ROUTE");
+  return out;
+}
 export default {
   async fetch(req, env, ctx) {
     if (!ROUTE && env.AIPAYGEN_ROUTE) { ROUTE = String(env.AIPAYGEN_ROUTE).trim().replace(/^.*\/g\//, ""); GATEWAY = AIPAYGEN + "/g/" + ROUTE; }
-    if (!ROUTE) return fetch(req); // not set up yet: pass everything through
+    if (!ROUTE) return aipaygenUnset(req); // not set up yet: pass everything through, and say so
     // The gateway fetching a page it was paid for: serve it.
     if (env.AIPAYGEN_SECRET && req.headers.get("x-aipaygen-gateway-secret") === env.AIPAYGEN_SECRET) return fetch(req);
     const u = new URL(req.url);
@@ -202,13 +338,14 @@ export default {
     }
     const named = (req.headers.get("user-agent") || "").match(AI_BOTS);
     const ip = req.headers.get("cf-connecting-ip") || "";
-    const bot = named ? named[0] : isAiIp(ip, (p) => ctx.waitUntil(p)) ? "AI crawler (by IP)" : null;
+    const signed = WBA_ENABLED ? aipaygenSigned(await aipaygenWba(req.url, req.method, (h) => req.headers.get(h), (p) => ctx.waitUntil(p))) : null;
+    const bot = signed ? signed.bot : named ? named[0] : isAiIp(ip, (p) => ctx.waitUntil(p)) ? "AI crawler (by IP)" : null;
     if (!bot) { // people and search engines browse free; very fast page-only readers are listed in your report
       const w = aipaygenWatch(ip, u.pathname, req.headers.get("user-agent"), env.AIPAYGEN_SECRET);
       if (w) ctx.waitUntil(w);
       return fetch(req);
     }
-    const quote = await aipaygen402(req.url, bot, u.pathname, !!named && isAiIp(ip));
+    const quote = await aipaygen402(req.url, bot, u.pathname, !signed && !!named && isAiIp(ip), signed);
     ctx.waitUntil(aipaygenReport(env.AIPAYGEN_SECRET));
     // A crawler let in free still gets the terms Link and Content-Usage with the page.
     return quote || aipaygenSign(await fetch(req));

@@ -164,6 +164,11 @@ else
   for mod in rewrite headers setenvif; do
     printf '%s' "$mods" | grep -q "${mod}_module" || manual "Apache's $mod module is off. Turn it on first (sudo a2enmod $mod), then run this again."
   done
+  # A paying crawler's retry reaches AIPayGen only through these; without them it gets the price again (402), so the
+  # report still works and nothing is given away free, but nothing can be earned. Said now, not a reason to stop.
+  off=""
+  for mod in proxy proxy_http ssl; do printf '%s' "$mods" | grep -q "${mod}_module" || off="$off $mod"; done
+  if [ -n "$off" ]; then say "Note: to be paid later, also turn on Apache's${off} module(s): sudo a2enmod proxy proxy_http ssl (until then a paying crawler gets your price again, never your page for free)."; fi
 fi
 
 BLOCKS="$(find_blocks)"
