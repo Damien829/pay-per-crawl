@@ -306,7 +306,7 @@ if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
   send "$API/v1/gateway/hits/$ROUTE" "$BODY"
   case $? in
     0) rm -f "$TMP"; touch "$LOG.reported" ;;
-    2) rm -f "$TMP"; rc=1 ;;                          # refused for good: sending them again would fail again
+    2) rm -f "$TMP"; touch "$LOG.reported"; rc=1 ;;                          # refused for good: sending them again would fail again
     *) cat "$TMP" >> "$LOG"; rm -f "$TMP"; rc=1 ;;   # keep the visits for the next run
   esac
 fi
@@ -314,7 +314,12 @@ fi
 # Installed but quiet: one empty report a day (none while counts went out), so your report shows the setup is live
 # before any AI crawler comes. No visitor data in it: counts {}.
 if [ "$SECRET" != "YOUR_GATEWAY_SECRET" ] && { [ ! -e "$LOG.reported" ] || [ -n "$(find "$LOG.reported" -mmin +1440 2>/dev/null)" ]; }; then
-  if send "$API/v1/gateway/hits/$ROUTE" '{"counts":{},"paths":{}}'; then touch "$LOG.reported"; else rc=1; fi
+  send "$API/v1/gateway/hits/$ROUTE" '{"counts":{},"paths":{}}'
+  case $? in
+    0) touch "$LOG.reported" ;;
+    2) touch "$LOG.reported"; rc=1 ;;   # refused for good (wrong secret, route gone): asking again would be refused again
+    *) rc=1 ;;               # busy or unreachable: try again next run
+  esac
 fi
 
 # True when the file is missing or older than this many minutes.
