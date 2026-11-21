@@ -304,10 +304,16 @@ if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
     }' "$TMP")
   send "$API/v1/gateway/hits/$ROUTE" "$BODY"
   case $? in
-    0) rm -f "$TMP" ;;
+    0) rm -f "$TMP"; touch "$DIR/reported" ;;
     2) rm -f "$TMP"; rc=1 ;;                          # refused for good: sending them again would fail again
     *) cat "$TMP" >> "$LOG"; rm -f "$TMP"; rc=1 ;;   # keep the visits for the next run
   esac
+fi
+
+# Installed but quiet: one empty report a day (none while counts went out), so your report shows the setup is live
+# before any AI crawler comes. No visitor data in it: counts {}.
+if [ "$SECRET" != "YOUR_GATEWAY_SECRET" ] && { [ ! -e "$DIR/reported" ] || [ -n "$(find "$DIR/reported" -mmin +1440 2>/dev/null)" ]; }; then
+  if send "$API/v1/gateway/hits/$ROUTE" '{"counts":{},"paths":{}}'; then touch "$DIR/reported"; else rc=1; fi
 fi
 
 # True when the file is missing or older than this many minutes.

@@ -41,6 +41,8 @@ function isAiIp(ip, wait) {
   return !!x && AI_NETS.some(([v, s, b]) => v === x[0] && x[1] >> s === b);
 }
 // Answer AI crawlers here with your price; only paid retries go to AIPayGen.
+// The first "still installed" report is due 10 minutes after this process starts (so short-lived isolates send none), then daily.
+let HB_AT = Date.now() - 864e5 + 6e5;
 let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = Date.now(), FAST = {}, FAST_N = 0, FREE_USED = {}, FREE_WIN = "";
 // This site's AI Terms (what AI may do with its pages, per use; aipaygen.com/ai-terms), served at /.well-known/ai-terms.
 async function aipaygenTerms() {
@@ -145,11 +147,16 @@ function aipaygenSign(res) {
 // Visit counts for your AI crawler report, sent every few minutes in one small request.
 async function aipaygenReport(secret) {
   const every = (QUOTE && QUOTE.report) || { every_seconds: 600, max_hits: 500 };
-  if (!secret || !(HIT_N + FAST_N) || (HIT_N < every.max_hits && Date.now() - SENT_AT < every.every_seconds * 1000)) return;
+  if (!secret) return;
+  const now = Date.now();
+  // Installed but quiet: one empty report when this process first sees traffic, then at most once a day, so your report
+  // shows the setup is live before any AI crawler comes (it carries no visitor data: counts {}).
+  if (!(HIT_N + FAST_N)) { if (now - HB_AT < 864e5) return; }
+  else if (HIT_N < every.max_hits && now - SENT_AT < every.every_seconds * 1000) return;
   const pages = Object.fromEntries(Object.entries(PAGES).sort((a, b) => b[1] - a[1]).slice(0, 10));
   const fast = Object.fromEntries(Object.entries(FAST).sort((a, b) => b[1].times - a[1].times).slice(0, 20));
   const body = JSON.stringify(FAST_N ? { counts: HITS, paths: pages, fast } : { counts: HITS, paths: pages });
-  HITS = {}; PAGES = {}; HIT_N = 0; SENT_AT = Date.now(); FAST = {}; FAST_N = 0;
+  HITS = {}; PAGES = {}; HIT_N = 0; SENT_AT = now; HB_AT = now; FAST = {}; FAST_N = 0;
   try {
     await fetch(AIPAYGEN + "/v1/gateway/hits/" + ROUTE, { method: "POST", headers: { "content-type": "application/json", "x-aipaygen-gateway-secret": secret }, body, signal: AbortSignal.timeout(5000) });
   } catch {}
@@ -167,7 +174,7 @@ function aipaygenNet(ip) {
   return g.length === 8 && g.every((x) => /^[0-9a-f]{1,4}$/i.test(x)) ? g.slice(0, 3).map((x) => parseInt(x, 16).toString(16)).join(":") + "::/48" : null;
 }
 function aipaygenWatch(ip, path, ua, secret) {
-  const net = aipaygenNet(ip), flush = () => (FAST_N ? aipaygenReport(secret) : undefined);
+  const net = aipaygenNet(ip), flush = () => (FAST_N || Date.now() - HB_AT >= 864e5 ? aipaygenReport(secret) : undefined);
   if (!net) return flush();
   const now = Date.now(), lim = (QUOTE && QUOTE.fast) || { pages: 60, seconds: 60 };
   let s = SEEN.get(ip);
