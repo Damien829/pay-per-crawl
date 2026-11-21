@@ -44,10 +44,20 @@ def parse(text):
     return None
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect: a 3xx answer is an error, so fetch() returns None (urllib follows them by default)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def fetch(site, timeout=5.0, user_agent="ai-terms-python/0.1", purpose="agent"):
     """Reads a site's terms from /.well-known/ai-terms. Returns None when there are none.
 
-    Only https is read, redirects are not followed off the file, and the body is capped.
+    Only https is read, redirects are not followed (a 3xx answer gives None), and the body is capped.
     """
     parts = urlsplit(site if "://" in site else "https://" + site)
     if parts.scheme != "https" or not parts.netloc:
@@ -57,7 +67,7 @@ def fetch(site, timeout=5.0, user_agent="ai-terms-python/0.1", purpose="agent"):
         headers={"User-Agent": user_agent, "Accept": "application/json", "AI-Purpose": purpose},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:
+        with _OPENER.open(req, timeout=timeout) as res:
             if res.status != 200:
                 return None
             return parse(res.read(MAX_BYTES).decode("utf-8", "replace"))

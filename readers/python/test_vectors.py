@@ -3,6 +3,8 @@ import json
 import os
 import sys
 
+import urllib.error
+
 import ai_terms
 
 here = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +46,22 @@ assert ai_terms.allowed_within({"access": "paid", "price": {"amount": "0.002"}},
 assert ai_terms.allowed_within({"access": "paid", "price": {"amount": "5"}}, 0.01) is False
 assert ai_terms.allowed_within({"access": "paid"}, 0.01) is False
 assert ai_terms.fetch("http://example.com") is None  # https only
+# No redirects: a 3xx is refused, not followed (urllib's default opener follows them, even from https to http).
+# Checked on a loopback http server through the opener fetch() uses; no network.
+import http.server, threading
+class _Redirect(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def do_GET(self):
+        self.send_response(302); self.send_header("Location", "/elsewhere"); self.end_headers()
+_srv = http.server.HTTPServer(("127.0.0.1", 0), _Redirect)
+threading.Thread(target=_srv.serve_forever, daemon=True).start()
+try:
+    ai_terms._OPENER.open("http://127.0.0.1:%d/.well-known/ai-terms" % _srv.server_port, timeout=3)
+    raise AssertionError("fetch's opener followed a redirect")
+except urllib.error.HTTPError as e:
+    assert e.code == 302
+finally:
+    _srv.shutdown()
 
 assert ai_terms.content_usage({"default": "allow", "uses": {}}) == "train-ai=y, ai-use=y, search=y"
 assert ai_terms.content_usage({"default": "deny", "uses": {"search": {"access": "paid"}}}) == "train-ai=n, ai-use=n"
