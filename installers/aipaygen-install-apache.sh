@@ -401,8 +401,8 @@ mkdir -p "$R/var/lib/aipaygen"
 put "$R/etc/apache2/aipaygen-site.conf" 644 <<'AIPAYGEN_EOF'
 # AIPayGen pay-per-crawl (written by the AIPayGen installer). Included from your site's <VirtualHost>.
 Include /etc/aipaygen/apache-secret.conf
-# Which requests are AI crawlers: by address first (the lists OpenAI, Anthropic, Perplexity, Mistral,
-# DuckDuckGo and Common Crawl publish; the script keeps this file fresh), then by name.
+# Which requests are AI crawlers: by address first (the lists AI companies publish, named at
+# https://aipaygen.com/ai-crawlers#checkable; the script keeps this file fresh), then by name.
 IncludeOptional /var/lib/aipaygen/ai-ips.conf
 # The AI crawler names, and "<name> (fake)" for a name whose operator publishes its addresses used from outside them
 # (only once ai-ips.conf has loaded): the script keeps this file fresh.

@@ -407,8 +407,8 @@ put "$R/etc/nginx/conf.d/aipaygen.conf" 644 <<'AIPAYGEN_EOF'
 # AIPayGen AI crawler report (http level; written by the AIPayGen installer).
 # The AI crawler names (and which of them can be called fake): the script above keeps this file fresh.
 include /etc/nginx/aipaygen-bots.conf;
-# AI crawlers that hide their name, by address: the lists OpenAI, Anthropic, Perplexity, Mistral,
-# DuckDuckGo and Common Crawl publish (the script above keeps this file fresh).
+# AI crawlers that hide their name, by address: the lists AI companies publish, named at
+# https://aipaygen.com/ai-crawlers#checkable (the script above keeps this file fresh).
 geo $aipaygen_ai_ip { default 0; include /etc/nginx/aipaygen-ai-ips.conf; }
 # The page as the crawler asked for it, without the query ($uri changes when a rewrite runs).
 map $request_uri $aipaygen_path { default ""; "~^([^?]*)" $1; }
