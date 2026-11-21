@@ -91,7 +91,7 @@ if [ "$MODE" = uninstall ]; then
     esac
   done < "$MANIFEST"
   rm -f "$CRON"
-  if [ "$KIND" = nginx ]; then rm -f "$R/etc/nginx/aipaygen-ai-ips.conf" "$R/var/log/nginx/aipaygen-ai.log" "$R/var/log/nginx/aipaygen-ai.log.sending"; else rm -rf "$R/var/lib/aipaygen"; fi
+  if [ "$KIND" = nginx ]; then rm -f "$R/etc/nginx/aipaygen-ai-ips.conf" "$R/etc/nginx/aipaygen-bots.conf" "$R/var/log/nginx/aipaygen-ai.log" "$R/var/log/nginx/aipaygen-ai.log.sending"; else rm -rf "$R/var/lib/aipaygen"; fi
   if $TEST >/dev/null 2>&1; then $RELOAD >/dev/null 2>&1 || true; else say "aipaygen: removed, but the configuration check failed; look at the output of: $TEST"; fi
   rm -rf "$ETC" "$LOGDIR"
   say "AIPayGen pay-per-crawl is removed from this server. To delete your route and its data at AIPayGen too: $API/pay-per-crawl/delete"
@@ -327,24 +327,73 @@ if stale "$DIR/ai-terms.json" 50; then
   rm -f "$DIR/quote.new" "$DIR/quote.b64.new" "$DIR/quote.json.new"
 fi
 
-# 3. AI crawler addresses, once a day. Apache reads this file at start, so it is reloaded when the
+# 3. AI crawler addresses, once a day. Apache reads this file at start, so it is reloaded (below) when the
 #    list changed, and only if Apache says the configuration is still valid.
+changed=""
 if stale "$DIR/ai-ips.conf" 1440; then
   if curl -fsS -m 30 "$API/v1/ai_bot_ips?format=apache" -o "$DIR/ai-ips.new" 2>/dev/null && grep -q '^SetEnvIfExpr ' "$DIR/ai-ips.new"; then
     if cmp -s "$DIR/ai-ips.new" "$DIR/ai-ips.conf" 2>/dev/null; then
       rm -f "$DIR/ai-ips.new"; touch "$DIR/ai-ips.conf"
     else
-      [ -f "$DIR/ai-ips.conf" ] && cp "$DIR/ai-ips.conf" "$DIR/ai-ips.old"
-      mv "$DIR/ai-ips.new" "$DIR/ai-ips.conf"
-      CTL=$(command -v apachectl || command -v apache2ctl || true)
-      if [ -n "$CTL" ]; then
-        if "$CTL" configtest >/dev/null 2>&1; then "$CTL" graceful >/dev/null 2>&1 || true
-        elif [ -f "$DIR/ai-ips.old" ]; then mv "$DIR/ai-ips.old" "$DIR/ai-ips.conf"   # put the last good list back
-        else rm -f "$DIR/ai-ips.conf"; fi
-      fi
-      rm -f "$DIR/ai-ips.old"
+      if [ -f "$DIR/ai-ips.conf" ]; then cp "$DIR/ai-ips.conf" "$DIR/ai-ips.conf.old"; fi
+      mv "$DIR/ai-ips.new" "$DIR/ai-ips.conf"; changed="$changed $DIR/ai-ips.conf"
     fi
   else rm -f "$DIR/ai-ips.new"; rc=1; fi
+fi
+
+# The AI crawler names file: exactly our header, the one SetEnvIfNoCase line with only crawler names in its group, and
+# SetEnvIfExpr lines of exactly the shape we generate, one per name. Anything else is refused; the last good file stays.
+# A name that would match people's browsers (under 4 characters, a browser token, or found in a browser's user agent),
+# or a list under half the size of the one in place ($2), is refused too.
+strict_get() { curl -fsS --proto =https --max-filesize 65536 --max-time 20 "$1" -o "$2" 2>/dev/null; }
+bots_ok() {
+  awk -v cur="${2:-}" '
+    BEGIN { split("mozilla chrome chromium safari applewebkit webkit gecko firefox edg edge opr opera mobile windows macintosh linux android iphone ipad khtml version like compatible", dl, " "); for (j in dl) deny[dl[j]] = 1
+      ua[1] = "mozilla/5.0 (windows nt 10.0; win64; x64) applewebkit/537.36 (khtml, like gecko) chrome/131.0.0.0 safari/537.36 edg/131.0.0.0"
+      ua[2] = "mozilla/5.0 (macintosh; intel mac os x 10_15_7) applewebkit/605.1.15 (khtml, like gecko) version/18.1 safari/605.1.15"
+      ua[3] = "mozilla/5.0 (iphone; cpu iphone os 18_1 like mac os x) applewebkit/605.1.15 (khtml, like gecko) crios/131.0.6778.73 mobile/15e148 safari/604.1"
+      ua[4] = "mozilla/5.0 (x11; linux x86_64; rv:133.0) gecko/20100101 firefox/133.0"
+      ua[5] = "mozilla/5.0 (linux; android 14; sm-s918b) applewebkit/537.36 (khtml, like gecko) samsungbrowser/27.0 chrome/125.0.0.0 mobile safari/537.36"
+      ua[6] = "mozilla/5.0 (windows nt 10.0; win64; x64) applewebkit/537.36 (khtml, like gecko) chrome/131.0.0.0 safari/537.36 opr/115.0.0.0" }
+    function ok_name(u, l, j) { l = tolower(u); if (length(u) < 4 || (l in deny)) return 0; for (j in ua) if (index(ua[j], l)) return 0; return 1 }
+    function names(x, k, a, j, u) { if (x == "" || x !~ /^[-A-Za-z0-9|\\]+$/ || x ~ /\\[^-]/ || x ~ /\\$/ || x ~ /^[|]|[|]$|[|][|]/) return 0
+      k = split(x, a, "|"); for (j = 1; j <= k; j++) { u = a[j]; gsub(/\\-/, "-", u); if (!ok_name(u)) return 0 }; return k }
+    function count(f, p, q, line, c, r) { if (f == "") return 0; while ((getline line < f) > 0) if (++c == 2) { r = names(mid(line, p, q)); break }; close(f); return r }
+    function mid(x, p, q) { if (index(x, p) != 1 || length(x) <= length(p) + length(q) || substr(x, length(x) - length(q) + 1) != q) return ""; return substr(x, length(p) + 1, length(x) - length(p) - length(q)) }
+    BEGIN { a = "\047"; p3 = "SetEnvIfExpr \"reqenv(" a "aipaygen_ai_list" a ") == " a "1" a " && reqenv(" a "aipaygen_ai_ip" a ") != " a "1" a " && reqenv(" a "aipaygen_bot" a ") =~ /^"; m3 = "$/i\" \"aipaygen_bot="; s3 = " (fake)\""; p2 = "SetEnvIfNoCase User-Agent \"("; s2 = ")\" aipaygen_bot=$1" }
+    NR == 1 { ok = ($0 == "# AIPayGen AI crawler names v1"); next }
+    NR == 2 { n2 = names(mid($0, p2, s2)); ok = ok && n2; next }
+    { r = mid($0, p3, s3); i = index(r, m3)
+      if (i < 2) { ok = 0; next }
+      e = substr(r, 1, i - 1); n = substr(r, i + length(m3)); u = e; gsub(/\\-/, "-", u)
+      ok = ok && n ~ /^[A-Za-z0-9][-A-Za-z0-9]*$/ && ok_name(n) && u == n && e ~ /^[-A-Za-z0-9\\]+$/ && e !~ /\\[^-]/ && e !~ /\\$/ }
+    END { exit !(ok && NR >= 2 && !(n2 * 2 < count(cur, p2, s2))) }' "$1"
+}
+
+# 4. The AI crawler names, once a day, and at once while the file is missing or still the installer's placeholder.
+if stale "$DIR/bots.conf" 1440 || [ "$(head -n 1 "$DIR/bots.conf" 2>/dev/null)" != "# AIPayGen AI crawler names v1" ]; then
+  if strict_get "$API/v1/gateway/bots?format=apache" "$DIR/bots.new" && bots_ok "$DIR/bots.new" "$DIR/bots.conf"; then
+    if cmp -s "$DIR/bots.new" "$DIR/bots.conf" 2>/dev/null; then
+      rm -f "$DIR/bots.new"; touch "$DIR/bots.conf"
+    else
+      if [ -f "$DIR/bots.conf" ]; then cp "$DIR/bots.conf" "$DIR/bots.conf.old"; fi
+      mv "$DIR/bots.new" "$DIR/bots.conf"; changed="$changed $DIR/bots.conf"
+    fi
+  else rm -f "$DIR/bots.new"; rc=1; fi
+fi
+
+# 5. Apache reads these files when it starts: reload once when one changed, and only if Apache says the configuration
+#    is still valid; otherwise put each last good file back.
+if [ -n "$changed" ]; then
+  CTL=$(command -v apachectl || command -v apache2ctl || true)
+  if [ -n "$CTL" ]; then
+    if "$CTL" configtest >/dev/null 2>&1; then "$CTL" graceful >/dev/null 2>&1 || true
+    else
+      for f in $changed; do if [ -f "$f.old" ]; then mv "$f.old" "$f"; else rm -f "$f"; fi; done
+      rc=1
+    fi
+  fi
+  for f in $changed; do rm -f "$f.old"; done
 fi
 exit $rc
 AIPAYGEN_EOF
@@ -355,23 +404,9 @@ Include /etc/aipaygen/apache-secret.conf
 # Which requests are AI crawlers: by address first (the lists OpenAI, Anthropic, Perplexity, Mistral,
 # DuckDuckGo and Common Crawl publish; the script keeps this file fresh), then by name.
 IncludeOptional /var/lib/aipaygen/ai-ips.conf
-SetEnvIfNoCase User-Agent "(GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta\-externalagent|FacebookBot|cohere\-ai|Diffbot|YouBot|MistralAI\-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot)" aipaygen_bot=$1
-# A crawler name whose operator publishes its addresses, from outside them, is counted as "<name> (fake)" (only once
-# ai-ips.conf has loaded). One list covers every operator, so a name used from another AI company's addresses still
-# counts as real: fakes can be under-counted, never over-counted. Names with no published list are never called fake.
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^GPTBot$/i" "aipaygen_bot=GPTBot (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^OAI\-SearchBot$/i" "aipaygen_bot=OAI-SearchBot (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^ChatGPT\-User$/i" "aipaygen_bot=ChatGPT-User (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^ClaudeBot$/i" "aipaygen_bot=ClaudeBot (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^Claude\-User$/i" "aipaygen_bot=Claude-User (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^Claude\-SearchBot$/i" "aipaygen_bot=Claude-SearchBot (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^anthropic\-ai$/i" "aipaygen_bot=anthropic-ai (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^PerplexityBot$/i" "aipaygen_bot=PerplexityBot (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^Perplexity\-User$/i" "aipaygen_bot=Perplexity-User (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^CCBot$/i" "aipaygen_bot=CCBot (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^Amazonbot$/i" "aipaygen_bot=Amazonbot (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^MistralAI\-User$/i" "aipaygen_bot=MistralAI-User (fake)"
-SetEnvIfExpr "reqenv('aipaygen_ai_list') == '1' && reqenv('aipaygen_ai_ip') != '1' && reqenv('aipaygen_bot') =~ /^DuckAssistBot$/i" "aipaygen_bot=DuckAssistBot (fake)"
+# The AI crawler names, and "<name> (fake)" for a name whose operator publishes its addresses used from outside them
+# (only once ai-ips.conf has loaded): the script keeps this file fresh.
+IncludeOptional /var/lib/aipaygen/bots.conf
 # Their visits, one line each (crawler name and path only), for your report.
 CustomLog /var/lib/aipaygen/visits.log "%<{aipaygen_bot}e\t%U" env=aipaygen_bot
 

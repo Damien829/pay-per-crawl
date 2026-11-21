@@ -91,7 +91,7 @@ if [ "$MODE" = uninstall ]; then
     esac
   done < "$MANIFEST"
   rm -f "$CRON"
-  if [ "$KIND" = nginx ]; then rm -f "$R/etc/nginx/aipaygen-ai-ips.conf" "$R/var/log/nginx/aipaygen-ai.log" "$R/var/log/nginx/aipaygen-ai.log.sending"; else rm -rf "$R/var/lib/aipaygen"; fi
+  if [ "$KIND" = nginx ]; then rm -f "$R/etc/nginx/aipaygen-ai-ips.conf" "$R/etc/nginx/aipaygen-bots.conf" "$R/var/log/nginx/aipaygen-ai.log" "$R/var/log/nginx/aipaygen-ai.log.sending"; else rm -rf "$R/var/lib/aipaygen"; fi
   if $TEST >/dev/null 2>&1; then $RELOAD >/dev/null 2>&1 || true; else say "aipaygen: removed, but the configuration check failed; look at the output of: $TEST"; fi
   rm -rf "$ETC" "$LOGDIR"
   say "AIPayGen pay-per-crawl is removed from this server. To delete your route and its data at AIPayGen too: $API/pay-per-crawl/delete"
@@ -318,10 +318,41 @@ looks_ok() {
     { bad = 1 }
     END { exit !(n >= min + 0 && !bad) }' "$1"
 }
-# get URL FILE HEAD LINE MIN: download to FILE.new, check it, and move it into place only if it changed.
+# The AI crawler names file: exactly our header and the two map lines we generate, with only crawler names inside
+# their two groups (letters, digits, "\-" and "|"). Anything else (another directive, an include, a "$" or a "}"
+# anywhere else, an extra line) is refused, and the last good file stays. So is a name that would match people's
+# browsers (under 4 characters, a browser token, or found in a browser's user agent), or a list under half the size of
+# the one in place ($2).
+bots_ok() {
+  P1='map $http_user_agent $aipaygen_ua_bot { default ""; "~*(' S1=')" $1; }' \
+  P2='map "$aipaygen_ua_bot|$aipaygen_ai_ip" $aipaygen_seen { default ""; "~^\|1$" "AI crawler (by IP)"; "~*^(' \
+  S2=')\|0$" "$1 (fake)"; "~^([^|]+)\|" $1; }' awk -v cur="${2:-}" '
+    BEGIN { split("mozilla chrome chromium safari applewebkit webkit gecko firefox edg edge opr opera mobile windows macintosh linux android iphone ipad khtml version like compatible", dl, " "); for (j in dl) deny[dl[j]] = 1
+      ua[1] = "mozilla/5.0 (windows nt 10.0; win64; x64) applewebkit/537.36 (khtml, like gecko) chrome/131.0.0.0 safari/537.36 edg/131.0.0.0"
+      ua[2] = "mozilla/5.0 (macintosh; intel mac os x 10_15_7) applewebkit/605.1.15 (khtml, like gecko) version/18.1 safari/605.1.15"
+      ua[3] = "mozilla/5.0 (iphone; cpu iphone os 18_1 like mac os x) applewebkit/605.1.15 (khtml, like gecko) crios/131.0.6778.73 mobile/15e148 safari/604.1"
+      ua[4] = "mozilla/5.0 (x11; linux x86_64; rv:133.0) gecko/20100101 firefox/133.0"
+      ua[5] = "mozilla/5.0 (linux; android 14; sm-s918b) applewebkit/537.36 (khtml, like gecko) samsungbrowser/27.0 chrome/125.0.0.0 mobile safari/537.36"
+      ua[6] = "mozilla/5.0 (windows nt 10.0; win64; x64) applewebkit/537.36 (khtml, like gecko) chrome/131.0.0.0 safari/537.36 opr/115.0.0.0" }
+    function ok_name(u, l, j) { l = tolower(u); if (length(u) < 4 || (l in deny)) return 0; for (j in ua) if (index(ua[j], l)) return 0; return 1 }
+    function names(x, k, a, j, u) { if (x == "" || x !~ /^[-A-Za-z0-9|\\]+$/ || x ~ /\\[^-]/ || x ~ /\\$/ || x ~ /^[|]|[|]$|[|][|]/) return 0
+      k = split(x, a, "|"); for (j = 1; j <= k; j++) { u = a[j]; gsub(/\\-/, "-", u); if (!ok_name(u)) return 0 }; return k }
+    function count(f, p, q, line, c, r) { if (f == "") return 0; while ((getline line < f) > 0) if (++c == 2) { r = names(mid(line, p, q)); break }; close(f); return r }
+    function mid(x, p, q) { if (index(x, p) != 1 || length(x) <= length(p) + length(q) || substr(x, length(x) - length(q) + 1) != q) return ""; return substr(x, length(p) + 1, length(x) - length(p) - length(q)) }
+    NR == 1 { ok = ($0 == "# AIPayGen AI crawler names v1"); next }
+    NR == 2 { n2 = names(mid($0, ENVIRON["P1"], ENVIRON["S1"])); ok = ok && n2; next }
+    NR == 3 { ok = ok && names(mid($0, ENVIRON["P2"], ENVIRON["S2"])); next }
+    { ok = 0 }
+    END { exit !(ok && NR == 3 && !(n2 * 2 < count(cur, ENVIRON["P1"], ENVIRON["S1"]))) }' "$1"
+}
+
+plain_get() { curl -fsS -m 30 "$1" -o "$2" 2>/dev/null; }
+strict_get() { curl -fsS --proto =https --max-filesize 65536 --max-time 20 "$1" -o "$2" 2>/dev/null; }
+# get URL FILE HEAD LINE MIN [CHECK [FETCH]]: download to FILE.new (plain_get, or FETCH), check it (looks_ok, or CHECK),
+# and move it into place only if it changed.
 changed=""
 get() {
-  if curl -fsS -m 30 "$1" -o "$2.new" 2>/dev/null && looks_ok "$2.new" "$3" "$4" "$5"; then
+  if "${7:-plain_get}" "$1" "$2.new" && "${6:-looks_ok}" "$2.new" "$3" "$4" "$5"; then
     if cmp -s "$2.new" "$2"; then rm -f "$2.new"; touch "$2"; return 0; fi
     if [ -f "$2" ]; then cp -p "$2" "$2.old" || { rm -f "$2.new"; return 1; }; fi
     mv "$2.new" "$2" && changed="$changed $2"
@@ -334,6 +365,11 @@ get() {
 IPS="$NGINX_DIR/aipaygen-ai-ips.conf"
 if [ -d "$NGINX_DIR" ] && stale "$IPS" 1440; then
   get "$API/v1/ai_bot_ips?format=nginx" "$IPS" "# AI crawler IP ranges" '^[0-9A-Fa-f.:]+([/][0-9]+)? 1;$' 1 || rc=1
+fi
+# 2b. The AI crawler names, once a day, and at once while the file is missing or still the installer's placeholder.
+BOTS="$NGINX_DIR/aipaygen-bots.conf"
+if [ -d "$NGINX_DIR" ] && { stale "$BOTS" 1440 || [ "$(head -n 1 "$BOTS" 2>/dev/null)" != "# AIPayGen AI crawler names v1" ]; }; then
+  get "$API/v1/gateway/bots?format=nginx" "$BOTS" "$BOTS" "" 0 bots_ok strict_get || rc=1
 fi
 # 3. Your price, about once an hour, once you charge (you create this file when you set up charging).
 QUOTE="$NGINX_DIR/aipaygen-quote.conf"
@@ -360,13 +396,20 @@ fi
 exit $rc
 AIPAYGEN_EOF
 [ -f "$R/etc/nginx/aipaygen-ai-ips.conf" ] || { printf '# filled in by /usr/local/bin/aipaygen-report.sh\n' > "$R/etc/nginx/aipaygen-ai-ips.conf"; created "$R/etc/nginx/aipaygen-ai-ips.conf"; }
+if [ ! -f "$R/etc/nginx/aipaygen-bots.conf" ]; then
+put "$R/etc/nginx/aipaygen-bots.conf" 644 <<'AIPAYGEN_EOF'
+# AIPayGen AI crawler names: none yet (aipaygen-report.sh fills this in)
+map $http_user_agent $aipaygen_ua_bot { default ""; }
+map "$aipaygen_ua_bot|$aipaygen_ai_ip" $aipaygen_seen { default ""; }
+AIPAYGEN_EOF
+fi
 put "$R/etc/nginx/conf.d/aipaygen.conf" 644 <<'AIPAYGEN_EOF'
 # AIPayGen AI crawler report (http level; written by the AIPayGen installer).
-map $http_user_agent $aipaygen_ua_bot { default ""; "~*(GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta\-externalagent|FacebookBot|cohere\-ai|Diffbot|YouBot|MistralAI\-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot)" $1; }
+# The AI crawler names (and which of them can be called fake): the script above keeps this file fresh.
+include /etc/nginx/aipaygen-bots.conf;
 # AI crawlers that hide their name, by address: the lists OpenAI, Anthropic, Perplexity, Mistral,
 # DuckDuckGo and Common Crawl publish (the script above keeps this file fresh).
 geo $aipaygen_ai_ip { default 0; include /etc/nginx/aipaygen-ai-ips.conf; }
-map "$aipaygen_ua_bot|$aipaygen_ai_ip" $aipaygen_seen { default ""; "~^\|1$" "AI crawler (by IP)"; "~*^(GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|CCBot|Amazonbot|MistralAI\-User|DuckAssistBot)\|0$" "$1 (fake)"; "~^([^|]+)\|" $1; }
 # The page as the crawler asked for it, without the query ($uri changes when a rewrite runs).
 map $request_uri $aipaygen_path { default ""; "~^([^?]*)" $1; }
 log_format aipaygen_ai escape=json '$aipaygen_seen\t$aipaygen_path';
