@@ -291,6 +291,8 @@ if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
   cp "$LOG" "$TMP" && : > "$LOG"
   BODY=$(awk -F '\t' '
   $1 != "" { n[$1]++; if ($2 ~ /^\// && length($2) <= 200) p[$2]++ }
+  # A verified crawler (its name, and the address flag the log carries as a third column) reading your AI Terms file.
+  $1 != "" && $1 !~ /[\\"]/ && $2 == "/.well-known/ai-terms" && $3 == "1" && $1 != "AI crawler (by IP)" && $1 !~ / \(fake\)$/ { t[$1]++; tn = 1 }
   END {
     printf "{\"counts\":{"; s = ""
     for (b in n) { printf "%s\"%s\":%d", s, b, n[b]; s = "," }
@@ -301,7 +303,9 @@ if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
       if (best == "") break
       printf "%s\"%s\":%d", s, best, bn; s = ","; delete p[best]
     }
-    printf "}}"
+    printf "}"
+    if (tn) { printf ",\"terms\":{"; s = ""; for (b in t) { printf "%s\"%s\":%d", s, b, t[b]; s = "," }; printf "}" }
+    printf "}"
   }' "$TMP")
   send "$API/v1/gateway/hits/$ROUTE" "$BODY"
   case $? in
@@ -428,7 +432,7 @@ include /etc/nginx/aipaygen-bots.conf;
 geo $aipaygen_ai_ip { default 0; include /etc/nginx/aipaygen-ai-ips.conf; }
 # The page as the crawler asked for it, without the query ($uri changes when a rewrite runs).
 map $request_uri $aipaygen_path { default ""; "~^([^?]*)" $1; }
-log_format aipaygen_ai escape=json '$aipaygen_seen\t$aipaygen_path';
+log_format aipaygen_ai escape=json '$aipaygen_seen\t$aipaygen_path\t$aipaygen_ai_ip';
 access_log /var/log/nginx/aipaygen-ai.log aipaygen_ai if=$aipaygen_seen;
 AIPAYGEN_EOF
 put "$R/etc/nginx/snippets/aipaygen-site.conf" 644 <<'AIPAYGEN_EOF'

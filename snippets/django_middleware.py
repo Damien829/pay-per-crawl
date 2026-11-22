@@ -17,7 +17,7 @@ AI_BOTS = re.compile("|".join(map(re.escape, ["GPTBot","OAI-SearchBot","ChatGPT-
 ASSET = re.compile("[.](css|js|mjs|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|map)$", re.I)
 
 _lock = threading.Lock()
-_state = {"quote": None, "quote_at": 0.0, "nets": {}, "nets_at": 0.0, "hits": {}, "paths": {}, "n": 0, "sent_at": 0.0, "sending": False, "free_used": {}, "free_win": "", "hb_at": time.time() - 86400 + 600}
+_state = {"quote": None, "quote_at": 0.0, "nets": {}, "nets_at": 0.0, "hits": {}, "paths": {}, "terms": {}, "n": 0, "sent_at": 0.0, "sending": False, "free_used": {}, "free_win": "", "hb_at": time.time() - 86400 + 600}
 
 
 def _get(url, timeout=3):
@@ -98,8 +98,11 @@ def _send_report(secret):
         elif _state["n"] < every.get("max_hits", 500) and time.time() - _state["sent_at"] < max(60, every.get("every_seconds", 60)):
             return
         top = dict(sorted(_state["paths"].items(), key=lambda kv: -kv[1])[:10])
-        body = json.dumps({"counts": _state["hits"], "paths": top}).encode()
-        _state.update(hits={}, paths={}, n=0, sent_at=time.time(), hb_at=time.time(), sending=True)
+        out = {"counts": _state["hits"], "paths": top}
+        if _state["terms"]:
+            out["terms"] = _state["terms"]  # verified crawlers that read your AI Terms file, with the visits: no request of its own
+        body = json.dumps(out).encode()
+        _state.update(hits={}, paths={}, terms={}, n=0, sent_at=time.time(), hb_at=time.time(), sending=True)
 
     def post():
         try:
@@ -406,6 +409,13 @@ class AIPayGenMiddleware:
         h = request.headers
         # This site's AI Terms (per-use terms for AI, aipaygen.com/ai-terms), served at /.well-known/ai-terms.
         if request.path == "/.well-known/ai-terms":
+            # A crawler named in its user agent AND at an address its company publishes (the list the visits use) is
+            # counted as a reader of the file, in memory, and sent with the next batch.
+            named_t = AI_BOTS.search(h.get("user-agent", ""))
+            if named_t and _ai_ip(_client_ip(request)):
+                with _lock:
+                    if named_t.group(0) in _state["terms"] or len(_state["terms"]) < 50:
+                        _state["terms"][named_t.group(0)] = _state["terms"].get(named_t.group(0), 0) + 1
             try:
                 resp = HttpResponse(_get(AIPAYGEN + "/v1/gateway/terms/" + ROUTE), content_type="application/json")
                 resp["cache-control"] = "public, max-age=900"

@@ -53,9 +53,13 @@ function isAiIp(ip, wait) {
 const [AIPAYGEN, ROUTE] = GATEWAY.split("/g/");
 // The first "still installed" report is due 10 minutes after this process starts (so short-lived isolates send none), then daily.
 let HB_AT = Date.now() - 864e5 + 6e5;
-let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, HIT_N = 0, SENT_AT = 0, FAST = {}, FAST_N = 0, FREE_USED = {}, FREE_WIN = "";
+let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, TERMS = {}, HIT_N = 0, SENT_AT = 0, FAST = {}, FAST_N = 0, FREE_USED = {}, FREE_WIN = "";
 // This site's AI Terms (what AI may do with its pages, per use; aipaygen.com/ai-terms), served at /.well-known/ai-terms.
-async function aipaygenTerms() {
+// isAi: whether the request comes from a published AI crawler address. A verified crawler (its name and that address)
+// reading this file is counted with the visits and sent in the same batched report: no request of its own.
+async function aipaygenTerms(ua, isAi) {
+  const m = ua ? String(ua).match(AI_BOTS) : null;
+  try { if (m && isAi && isAi() && (m[0] in TERMS || Object.keys(TERMS).length < 50)) TERMS[m[0]] = (TERMS[m[0]] || 0) + 1; } catch {}
   try {
     const r = await fetch(AIPAYGEN + "/v1/gateway/terms/" + ROUTE, { signal: AbortSignal.timeout(3000) });
     if (r.ok) return new Response(await r.text(), { headers: { "content-type": "application/json", "cache-control": "public, max-age=900", "access-control-allow-origin": "*" } });
@@ -166,8 +170,9 @@ async function aipaygenReport(secret) {
   else if (HIT_N < every.max_hits && now - SENT_AT < Math.max(60, every.every_seconds) * 1000) return;
   const pages = Object.fromEntries(Object.entries(PAGES).sort((a, b) => b[1] - a[1]).slice(0, 10));
   const fast = Object.fromEntries(Object.entries(FAST).sort((a, b) => b[1].times - a[1].times).slice(0, 20));
-  const body = JSON.stringify(FAST_N ? { counts: HITS, paths: pages, fast } : { counts: HITS, paths: pages });
-  HITS = {}; PAGES = {}; HIT_N = 0; SENT_AT = now; HB_AT = now; FAST = {}; FAST_N = 0;
+  const terms = Object.keys(TERMS).length ? { terms: TERMS } : {};
+  const body = JSON.stringify(FAST_N ? { counts: HITS, paths: pages, fast, ...terms } : { counts: HITS, paths: pages, ...terms });
+  HITS = {}; PAGES = {}; TERMS = {}; HIT_N = 0; SENT_AT = now; HB_AT = now; FAST = {}; FAST_N = 0;
   try {
     await fetch(AIPAYGEN + "/v1/gateway/hits/" + ROUTE, { method: "POST", headers: { "content-type": "application/json", "x-aipaygen-gateway-secret": secret }, body, signal: AbortSignal.timeout(5000) });
   } catch {}
@@ -340,7 +345,7 @@ function aipaygenClientIp(req) {
 export default async function aipaygen(req, ev) {
   const secret = process.env.AIPAYGEN_SECRET;
   if (secret && req.headers.get("x-aipaygen-gateway-secret") === secret) return NextResponse.next();
-  if (req.nextUrl.pathname === "/.well-known/ai-terms") { const t = await aipaygenTerms(); if (t) return t; }
+  if (req.nextUrl.pathname === "/.well-known/ai-terms") { const t = await aipaygenTerms(req.headers.get("user-agent"), () => isAiIp(aipaygenClientIp(req))); if (t) return t; }
   // robots.txt is free for every crawler: it is how they learn your rules and find your terms.
   // Lines to add to it, written from your AI Terms (IETF aipref Content-Usage; training-only crawlers): https://aipaygen.com/v1/gateway/robots/YOUR_ROUTE_ID
   if (req.nextUrl.pathname === "/robots.txt") return NextResponse.next();

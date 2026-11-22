@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.6.1
+ * Version:           2.6.2
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'AIPAYGEN_PPC_GATEWAY', 'https://aipaygen.com' );
 // The plugin's own user agent for its calls to AIPayGen (WordPress's default would name this site).
-define( 'AIPAYGEN_PPC_UA', 'AIPayGen-WP/2.6.1' );
+define( 'AIPAYGEN_PPC_UA', 'AIPayGen-WP/2.6.2' );
 define( 'AIPAYGEN_PPC_BOTS', '/(GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta\-externalagent|FacebookBot|cohere\-ai|Diffbot|YouBot|MistralAI\-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot)/i' );
 
 /** A request header, unslashed and sanitized ('' when absent). */
@@ -164,6 +164,27 @@ function aipaygen_ppc_maybe_charge() {
 add_action( 'init', 'aipaygen_ppc_maybe_charge', 0 );
 
 /**
+ * A verified crawler (its name in the user agent AND an address its company publishes) reading your AI Terms file is
+ * counted with the visits, kept in the same option and sent in the same hourly batch: no request of its own. A name
+ * alone, an address alone or a person is not counted. At most 50 names.
+ */
+function aipaygen_ppc_count_terms_read() {
+	$ua = aipaygen_ppc_header( 'user-agent' );
+	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+	if ( ! preg_match( AIPAYGEN_PPC_BOTS, $ua, $m ) || ! aipaygen_ppc_ai_ip( $ip ) ) {
+		return;
+	}
+	$c = get_option( 'aipaygen_ppc_counts', array() );
+	if ( ! is_array( $c ) ) {
+		$c = array();
+	}
+	if ( isset( $c['terms'][ $m[0] ] ) || count( isset( $c['terms'] ) && is_array( $c['terms'] ) ? $c['terms'] : array() ) < 50 ) {
+		$c['terms'][ $m[0] ] = ( isset( $c['terms'][ $m[0] ] ) ? (int) $c['terms'][ $m[0] ] : 0 ) + 1;
+		update_option( 'aipaygen_ppc_counts', $c, false );
+	}
+}
+
+/**
  * This site's AI Terms at /.well-known/ai-terms: the route's terms from AIPayGen, kept 15 minutes. Serving them is
  * also how AIPayGen confirms you control this site (only the site's owner can make it serve this route's terms), so
  * no DNS record or file is needed. If AIPayGen can't be reached, WordPress answers that address as it normally would,
@@ -178,6 +199,7 @@ function aipaygen_ppc_serve_terms() {
 	if ( '/.well-known/ai-terms' !== $path ) {
 		return;
 	}
+	aipaygen_ppc_count_terms_read();
 	$kept = get_transient( 'aipaygen_ppc_terms' );
 	if ( ! is_array( $kept ) || ! isset( $kept['route'], $kept['body'] ) || $kept['route'] !== $route ) {
 		$res  = wp_remote_get( AIPAYGEN_PPC_GATEWAY . '/v1/gateway/terms/' . $route, array( 'timeout' => 3, 'redirection' => 0, 'user-agent' => AIPAYGEN_PPC_UA ) );
@@ -368,11 +390,19 @@ function aipaygen_ppc_send_counts() {
 	$route  = (string) get_option( 'aipaygen_ppc_route', '' );
 	$secret = (string) get_option( 'aipaygen_ppc_secret', '' );
 	$c      = get_option( 'aipaygen_ppc_counts', array() );
-	if ( '' === $route || '' === $secret || ! is_array( $c ) || ( empty( $c['bots'] ) && empty( $c['fast'] ) ) ) {
+	if ( '' === $route || '' === $secret || ! is_array( $c ) || ( empty( $c['bots'] ) && empty( $c['fast'] ) && empty( $c['terms'] ) ) ) {
 		return;
 	}
 	$paths = isset( $c['paths'] ) && is_array( $c['paths'] ) ? $c['paths'] : array();
 	arsort( $paths );
+	$body = array(
+		'counts' => (object) ( isset( $c['bots'] ) ? $c['bots'] : array() ),
+		'paths'  => (object) array_slice( $paths, 0, 10, true ),
+		'fast'   => (object) ( isset( $c['fast'] ) ? $c['fast'] : array() ),
+	);
+	if ( ! empty( $c['terms'] ) && is_array( $c['terms'] ) ) {
+		$body['terms'] = (object) $c['terms']; // verified crawlers that read your AI Terms file, with the counts.
+	}
 	$res = wp_remote_post(
 		AIPAYGEN_PPC_GATEWAY . '/v1/gateway/hits/' . $route,
 		array(
@@ -382,13 +412,7 @@ function aipaygen_ppc_send_counts() {
 				'content-type'              => 'application/json',
 				'x-aipaygen-gateway-secret' => $secret,
 			),
-			'body'    => wp_json_encode(
-				array(
-					'counts' => (object) ( isset( $c['bots'] ) ? $c['bots'] : array() ),
-					'paths'  => (object) array_slice( $paths, 0, 10, true ),
-					'fast'   => (object) ( isset( $c['fast'] ) ? $c['fast'] : array() ),
-				)
-			),
+			'body'    => wp_json_encode( $body ),
 		)
 	);
 	if ( ! is_wp_error( $res ) && 200 === (int) wp_remote_retrieve_response_code( $res ) ) {

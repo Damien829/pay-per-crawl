@@ -290,6 +290,8 @@ if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
   cp "$LOG" "$TMP" && : > "$LOG"
   BODY=$(awk -F '\t' '
     $1 != "" && $1 !~ /[\\"]/ { n[$1]++; if ($2 ~ /^\// && $2 !~ /[\\"]/ && length($2) <= 200) p[$2]++ }
+    # A verified crawler (its name, and the address flag the log carries as a third column) reading your AI Terms file.
+    $1 != "" && $1 !~ /[\\"]/ && $2 == "/.well-known/ai-terms" && $3 == "1" && $1 != "AI crawler (by IP)" && $1 !~ / \(fake\)$/ { t[$1]++; tn = 1 }
     END {
       printf "{\"counts\":{"; s = ""
       for (b in n) { printf "%s\"%s\":%d", s, b, n[b]; s = "," }
@@ -300,7 +302,9 @@ if [ -s "$LOG" ] && [ "$SECRET" != "YOUR_GATEWAY_SECRET" ]; then
         if (best == "") break
         printf "%s\"%s\":%d", s, best, bn; s = ","; delete p[best]
       }
-      printf "}}"
+      printf "}"
+      if (tn) { printf ",\"terms\":{"; s = ""; for (b in t) { printf "%s\"%s\":%d", s, b, t[b]; s = "," }; printf "}" }
+      printf "}"
     }' "$TMP")
   send "$API/v1/gateway/hits/$ROUTE" "$BODY"
   case $? in
@@ -423,8 +427,8 @@ IncludeOptional /var/lib/aipaygen/ai-ips.conf
 # The AI crawler names, and "<name> (fake)" for a name whose operator publishes its addresses used from outside them
 # (only once ai-ips.conf has loaded): the script keeps this file fresh.
 IncludeOptional /var/lib/aipaygen/bots.conf
-# Their visits, one line each (crawler name and path only), for your report.
-CustomLog /var/lib/aipaygen/visits.log "%<{aipaygen_bot}e\t%U" env=aipaygen_bot
+# Their visits, one line each (crawler name, path, and whether the address is on a published list), for your report.
+CustomLog /var/lib/aipaygen/visits.log "%<{aipaygen_bot}e\t%U\t%<{aipaygen_ai_ip}e" env=aipaygen_bot
 
 <Directory /var/lib/aipaygen>
   Require all granted

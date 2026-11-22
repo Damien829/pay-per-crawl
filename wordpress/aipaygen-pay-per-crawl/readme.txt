@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.6.1
+Stable tag: 2.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,7 +26,7 @@ This plugin relies on the AIPayGen gateway, a third-party service at https://aip
 1. **Price quote (about once an hour, or every 5 minutes while it can't get one):** downloads your route's price quote from https://aipaygen.com/v1/gateway/quote/<route>. With it, the plugin answers unpaid AI crawlers itself: an unpaid request is never sent to the gateway. The request names only your route id.
 2. **Paid requests (only when a request carries an x402 payment header):** the plugin sends the requested path and query string, the crawler's user agent and accept headers, the payment header and your route id to https://aipaygen.com/g/<route>. The gateway verifies the payment, fetches the page from your site (with your gateway secret, so the plugin lets it through) and settles the payment to your wallet. If that succeeds, WordPress serves the page to the crawler as usual. If the payment is refused or the gateway answers with an error, the crawler gets a JSON answer (a new quote or an error) and not the page. If the gateway can't be reached, the page is served as usual.
 3. **AI Terms (only when /.well-known/ai-terms is requested; a copy is kept 15 minutes, a failed download is retried after 5):** downloads your route's AI Terms from https://aipaygen.com/v1/gateway/terms/<route> and serves them at that address. The request names only your route id.
-4. **AI crawler counts (once an hour):** sends the number of AI crawler visits by crawler name and the 10 most-requested paths to https://aipaygen.com/v1/gateway/hits/<route>, with your gateway secret, so your report can show them. No visitor IP addresses, cookies or personal data are sent. With a persistent object cache only: when one address asks for 60 or more pages in a minute while sending a browser user agent, this report also includes its network range (the first three parts of the address, e.g. 203.0.113.0/24, never the full address), the user agent and the page rate. Nothing is charged or blocked; it is listed in your report for you to judge.
+4. **AI crawler counts (once an hour):** sends the number of AI crawler visits by crawler name, how many times each verified crawler read your AI Terms file, and the 10 most-requested paths to https://aipaygen.com/v1/gateway/hits/<route>, with your gateway secret, so your report can show them. No visitor IP addresses, cookies or personal data are sent. With a persistent object cache only: when one address asks for 60 or more pages in a minute while sending a browser user agent, this report also includes its network range (the first three parts of the address, e.g. 203.0.113.0/24, never the full address), the user agent and the page rate. Nothing is charged or blocked; it is listed in your report for you to judge.
 5. **Crawler address list (once a day, or after 15 minutes if the download failed):** downloads the published AI crawler IP ranges from https://aipaygen.com/v1/ai_bot_ips. Nothing about your visitors is sent.
 
 Requests from people, search engines and logged-in users are never sent to the gateway. Calls 1, 3, 4 and 5 use the user agent "AIPayGen-WP/<version>" instead of WordPress's default, which would include your site's address; a paid request (2) carries the crawler's own user agent, as listed above.
@@ -60,6 +60,9 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Anthropic, Perplexity, Mistral, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (Bytespider, for example) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.6.2 =
+* Your report can show which verified AI crawlers read your AI Terms file: a crawler whose name and address both match what its company publishes is counted when it fetches /.well-known/ai-terms, and the count goes out with the hourly crawler counts (no new request).
 
 = 2.6.1 =
 * A paid page is now served by WordPress itself once the gateway confirms the payment; the plugin no longer prints the gateway's copy. Any other gateway answer, and your AI Terms, are decoded and printed as JSON only.
