@@ -85,11 +85,11 @@ async function aipaygen402(url, bot, path, verified, opts) {
   if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
   if (!q || q.charge_mode === "off") return null; // report only: count the visit, serve the page
   // Bots this site lets in free (its route's settings, e.g. AI search in "training" mode): serve the page.
-  if ((q.free_bots || []).some((b) => b.toLowerCase() === String(bot).toLowerCase())) return null;
+  if ((Array.isArray(q.free_bots) ? q.free_bots : []).some((b) => String(b).toLowerCase() === String(bot).toLowerCase())) return null;
   // Free allowance: this many pages per UTC hour or day for each verified crawler, then the price.
   // Counted separately by each server process or serverless instance: a site running several can give up to
   // that many times the allowance (never less), because the counts are not shared between them.
-  const fa = q.free;
+  const fa = q.free && typeof q.free === "object" ? q.free : null;
   if ((verified || (opts && opts.signed && q.signed_free === true)) && fa && fa.requests > 0) {
     const win = new Date().toISOString().slice(0, fa.per === "hour" ? 13 : 10);
     if (win !== FREE_WIN) { FREE_WIN = win; FREE_USED = {}; }
@@ -333,6 +333,7 @@ export default {
   async fetch(req, env, ctx) {
     if (!ROUTE && env.AIPAYGEN_ROUTE) { ROUTE = String(env.AIPAYGEN_ROUTE).trim().replace(/^.*\/g\//, ""); GATEWAY = AIPAYGEN + "/g/" + ROUTE; }
     if (!ROUTE) return aipaygenUnset(req); // not set up yet: pass everything through, and say so
+    try {
     // The gateway fetching a page it was paid for: serve it.
     if (env.AIPAYGEN_SECRET && req.headers.get("x-aipaygen-gateway-secret") === env.AIPAYGEN_SECRET) return fetch(req);
     const u = new URL(req.url);
@@ -362,5 +363,13 @@ export default {
     ctx.waitUntil(aipaygenReport(env.AIPAYGEN_SECRET));
     // A crawler let in free still gets the terms Link and Content-Usage with the page.
     return quote || aipaygenSign(await fetch(req));
+    } catch (e) {
+      // Never take the site down: an unexpected error in this code (or a malformed answer from AIPayGen) serves the page as if
+      // it were not here. A paid retry cannot be served free, so it gets the same 503 as an unreachable gateway; anything that
+      // is not a GET or HEAD is not sent twice.
+      if (req.headers.get("payment-signature") || req.headers.get("x-payment")) return new Response('{"error":"PAYMENT_GATEWAY_UNAVAILABLE","message":"The payment service could not be reached. Nothing was charged. Try again shortly."}', { status: 503, headers: { "content-type": "application/json", "retry-after": "60", "cache-control": "no-store" } });
+      if (req.method === "GET" || req.method === "HEAD") return fetch(req);
+      throw e;
+    }
   },
 };

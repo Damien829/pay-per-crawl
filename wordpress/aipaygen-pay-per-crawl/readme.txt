@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.6.2
+Stable tag: 2.6.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,6 +60,12 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Anthropic, Perplexity, Mistral, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (Bytespider, for example) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.6.4 =
+* A visitor's page never waits on AIPayGen: the list of AI crawler addresses is now fetched by a one-off WP-Cron event, not on the first page view after it expires (that view could wait up to 5 seconds when AIPayGen was slow). Until it has loaded, AI crawlers are recognised by name only. If WP-Cron is switched off (DISABLE_WP_CRON), the same fetch runs after that visitor's page has been sent instead, at most once every 5 minutes while it keeps failing.
+
+= 2.6.3 =
+* The settings screen now says, once a route and secret are saved, whether AIPayGen knows the route (from the same price lookup the plugin already makes, which can be up to an hour old), that the gateway secret is checked by "Test my setup" or the first counts, when the first count shows in your report, and links "Test my setup" on your private report.
 
 = 2.6.2 =
 * Your report can show which verified AI crawlers read your AI Terms file: a crawler whose name and address both match what its company publishes is counted when it fetches /.well-known/ai-terms, and the count goes out with the hourly crawler counts (no new request).

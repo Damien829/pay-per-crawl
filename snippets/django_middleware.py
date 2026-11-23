@@ -38,8 +38,10 @@ def _quote():
     # While AIPayGen can't be reached, one request tries again every 5 minutes; the others serve the page at once.
     if _due("quote_at", 3600):
         try:
-            _state["quote"] = json.loads(_get(AIPAYGEN + "/v1/gateway/quote/" + ROUTE))
-            _state["quote_at"] = time.time()
+            q = json.loads(_get(AIPAYGEN + "/v1/gateway/quote/" + ROUTE))
+            if isinstance(q, dict):  # anything else is not a quote: keep the last good one
+                _state["quote"] = q
+                _state["quote_at"] = time.time()
         except Exception:
             pass
     return _state["quote"]
@@ -86,7 +88,10 @@ def _ai_ip(ip):
 
 
 def _send_report(secret):
-    every = (_state["quote"] or {}).get("report") or {"every_seconds": 60, "max_hits": 500}
+    rep = (_state["quote"] or {}).get("report")
+    every = rep if isinstance(rep, dict) else {}
+    every = {"every_seconds": every.get("every_seconds") if isinstance(every.get("every_seconds"), (int, float)) else 60,
+             "max_hits": every.get("max_hits") if isinstance(every.get("max_hits"), int) else 500}
     with _lock:
         if _state["sending"] or not secret:
             return
@@ -404,6 +409,30 @@ class AIPayGenMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # Fail open: an unexpected error in this file (or a malformed answer from AIPayGen) must never take the site down. The page
+        # is served as if this file were not here; a paid retry cannot be served free, so it gets a 503 "nothing was charged".
+        # If the site itself was already reached, the error is not ours to hide and the request is never run twice.
+        reached = []
+
+        def get_response(r):
+            reached.append(1)
+            return self.get_response(r)
+
+        try:
+            return self._handle(request, get_response)
+        except Exception:
+            if reached:
+                raise
+            h = request.headers
+            if h.get("payment-signature") or h.get("x-payment"):
+                from django.http import HttpResponse
+                r = HttpResponse(json.dumps({"error": "PAYMENT_GATEWAY_UNAVAILABLE", "message": "The payment service could not be reached. Nothing was charged. Try again shortly."}), status=503, content_type="application/json")
+                r["retry-after"] = "60"
+                r["cache-control"] = "no-store"
+                return r
+            return self.get_response(request)
+
+    def _handle(self, request, get_response):
         from django.http import HttpResponse
         secret = os.environ.get("AIPAYGEN_SECRET", "")
         h = request.headers
@@ -422,14 +451,14 @@ class AIPayGenMiddleware:
                 resp["access-control-allow-origin"] = "*"
                 return resp
             except Exception:
-                return self.get_response(request)
+                return get_response(request)
         # The gateway fetching a page it was paid for: serve it.
         if secret and h.get("x-aipaygen-gateway-secret") == secret:
-            return self.get_response(request)
+            return get_response(request)
         # robots.txt is free for every crawler: it is how they learn your rules and find your terms.
         # Lines to add to it, written from your AI Terms (IETF aipref Content-Usage; training-only crawlers): https://aipaygen.com/v1/gateway/robots/YOUR_ROUTE_ID
         if request.path == "/robots.txt":
-            return self.get_response(request)
+            return get_response(request)
         # A crawler retrying with a payment: AIPayGen verifies it, fetches the page and pays your wallet.
         if h.get("payment-signature") or h.get("x-payment"):
             fwd = {k: h[k] for k in ("payment-signature", "x-payment", "user-agent", "accept", "accept-language") if h.get(k)}
@@ -439,14 +468,19 @@ class AIPayGenMiddleware:
             except urllib.error.HTTPError as e:
                 status, body, headers = e.code, e.read(), e.headers
             except Exception:
-                return self.get_response(request)
+                # A payment that can't be checked is not accepted, and the page is not given free: the client is told to retry
+                # (as the Worker and Express snippets do).
+                r = HttpResponse(json.dumps({"error": "PAYMENT_GATEWAY_UNAVAILABLE", "message": "The payment service could not be reached. Nothing was charged. Try again shortly."}), status=503, content_type="application/json")
+                r["retry-after"] = "60"
+                r["cache-control"] = "no-store"
+                return r
             resp = HttpResponse(body, status=status)
             for k in ("content-type", "payment-required", "payment-response", "ai-purpose", "link", "content-usage", "x-aipaygen-charged", "x-aipaygen-delivery"):
                 if headers.get(k):
                     resp[k] = headers[k]
             return resp
         if ASSET.search(request.path):
-            return self.get_response(request)
+            return get_response(request)
         named = AI_BOTS.search(h.get("user-agent", ""))
         w = _wba(request)
         signed = w["known"] and w["v"] == "verified"
@@ -454,7 +488,7 @@ class AIPayGenMiddleware:
         bot = w["bot"] if (signed or forged) else (named.group(0) if named else ("AI crawler (by IP)" if _ai_ip(_client_ip(request)) else None))
         if not bot:
             _send_report(secret)  # returns at once unless the daily "still installed" report is due
-            return self.get_response(request)
+            return get_response(request)
         # Counted as "<name> (fake)": a name whose operator publishes its addresses (the quote's checked_bots), from
         # outside the address list this process has loaded. Never before the list has loaded; names with no published
         # list are never called fake. One list covers every operator, so a name used from another AI company's
@@ -472,12 +506,12 @@ class AIPayGenMiddleware:
             _state["n"] += 1
         _send_report(secret)
         # Report-only, gateway unreachable, or a crawler this site lets in free: serve the page.
-        if not q or q.get("charge_mode") == "off" or not q.get("accepts") or bot.lower() in [b.lower() for b in q.get("free_bots", [])]:
-            return _sign(self.get_response(request), q)
+        if not q or q.get("charge_mode") == "off" or not q.get("accepts") or bot.lower() in [str(b).lower() for b in (q.get("free_bots") if isinstance(q.get("free_bots"), list) else [])]:
+            return _sign(get_response(request), q)
         # Free allowance (AI Terms "free"): this many pages per UTC hour or day for each verified crawler,
         # one whose name AND address match the lists AI companies publish. Counted separately by each
         # worker process: a site running several can give up to that many times the allowance (never less).
-        fa = q.get("free") or {}
+        fa = q.get("free") if isinstance(q.get("free"), dict) else {}
         # A signed agent gets it only where the route turns that on (signed_free true in the quote; off otherwise).
         allowed = (not signed and not forged and named and _ai_ip(_client_ip(request))) or (signed and q.get("signed_free") is True)
         if allowed and isinstance(fa.get("requests"), int) and fa["requests"] > 0:
@@ -490,7 +524,7 @@ class AIPayGenMiddleware:
                 if k in used or len(used) < 200:
                     used[k] = used.get(k, 0) + 1
                     if used[k] <= fa["requests"]:
-                        return _sign(self.get_response(request), q)
+                        return _sign(get_response(request), q)
         quote = {"x402Version": 2, "error": "PAYMENT_REQUIRED",
                  "resource": {"url": request.build_absolute_uri(), "description": q.get("description", ""), "mimeType": "text/html"},
                  "accepts": q["accepts"]}

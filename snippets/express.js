@@ -83,11 +83,11 @@ async function aipaygen402(url, bot, path, verified, opts) {
   if (PAGES[path] || Object.keys(PAGES).length < 300) PAGES[path] = (PAGES[path] || 0) + 1;
   if (!q || q.charge_mode === "off") return null; // report only: count the visit, serve the page
   // Bots this site lets in free (its route's settings, e.g. AI search in "training" mode): serve the page.
-  if ((q.free_bots || []).some((b) => b.toLowerCase() === String(bot).toLowerCase())) return null;
+  if ((Array.isArray(q.free_bots) ? q.free_bots : []).some((b) => String(b).toLowerCase() === String(bot).toLowerCase())) return null;
   // Free allowance: this many pages per UTC hour or day for each verified crawler, then the price.
   // Counted separately by each server process or serverless instance: a site running several can give up to
   // that many times the allowance (never less), because the counts are not shared between them.
-  const fa = q.free;
+  const fa = q.free && typeof q.free === "object" ? q.free : null;
   if ((verified || (opts && opts.signed && q.signed_free === true)) && fa && fa.requests > 0) {
     const win = new Date().toISOString().slice(0, fa.per === "hour" ? 13 : 10);
     if (win !== FREE_WIN) { FREE_WIN = win; FREE_USED = {}; }

@@ -3,7 +3,7 @@
  * Plugin Name:       AIPayGen Pay-per-crawl
  * Plugin URI:        https://aipaygen.com/pay-per-crawl
  * Description:       Charge AI crawlers (GPTBot, ClaudeBot, PerplexityBot...) per page with HTTP 402 and x402 USDC payments, paid straight to your wallet. People and search engines browse free.
- * Version:           2.6.2
+ * Version:           2.6.4
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            AIPayGen
@@ -22,13 +22,30 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 define( 'AIPAYGEN_PPC_GATEWAY', 'https://aipaygen.com' );
 // The plugin's own user agent for its calls to AIPayGen (WordPress's default would name this site).
-define( 'AIPAYGEN_PPC_UA', 'AIPayGen-WP/2.6.2' );
+define( 'AIPAYGEN_PPC_UA', 'AIPayGen-WP/2.6.4' );
 define( 'AIPAYGEN_PPC_BOTS', '/(GPTBot|OAI\-SearchBot|ChatGPT\-User|ClaudeBot|Claude\-User|Claude\-SearchBot|anthropic\-ai|PerplexityBot|Perplexity\-User|GoogleOther|CCBot|Bytespider|Amazonbot|meta\-externalagent|FacebookBot|cohere\-ai|Diffbot|YouBot|MistralAI\-User|DuckAssistBot|PetalBot|Timpibot|ImagesiftBot|omgili|AI2Bot|ElevenlabsCrawler|ElevenlabsBot)/i' );
 
 /** A request header, unslashed and sanitized ('' when absent). */
 function aipaygen_ppc_header( $name ) {
 	$key = 'HTTP_' . strtoupper( str_replace( '-', '_', $name ) );
 	return isset( $_SERVER[ $key ] ) ? sanitize_text_field( wp_unslash( $_SERVER[ $key ] ) ) : '';
+}
+
+/** Fetches the AI crawler address list into its cache (a one-off WP-Cron event, never on a visitor's request). */
+function aipaygen_ppc_refresh_ips() {
+	$res  = wp_remote_get( AIPAYGEN_PPC_GATEWAY . '/v1/ai_bot_ips?format=text', array( 'timeout' => 5, 'user-agent' => AIPAYGEN_PPC_UA ) );
+	$body = is_wp_error( $res ) ? '' : (string) wp_remote_retrieve_body( $res );
+	$list = array_values( array_filter( array_map( 'trim', explode( "\n", $body ) ) ) );
+	set_transient( 'aipaygen_ppc_ai_ips', $list, $list ? DAY_IN_SECONDS : 5 * MINUTE_IN_SECONDS );
+}
+add_action( 'aipaygen_ppc_refresh_ips', 'aipaygen_ppc_refresh_ips' );
+
+/** With WP-Cron off: the same fetch, once the visitor's response has gone out (as WordPress's own wp_cron does). */
+function aipaygen_ppc_refresh_ips_after_response() {
+	if ( function_exists( 'fastcgi_finish_request' ) ) {
+		fastcgi_finish_request();
+	}
+	aipaygen_ppc_refresh_ips();
 }
 
 /**
@@ -42,10 +59,17 @@ function aipaygen_ppc_ai_ip( $ip ) {
 	}
 	$list = get_transient( 'aipaygen_ppc_ai_ips' );
 	if ( false === $list ) {
-		$res  = wp_remote_get( AIPAYGEN_PPC_GATEWAY . '/v1/ai_bot_ips?format=text', array( 'timeout' => 5, 'user-agent' => AIPAYGEN_PPC_UA ) );
-		$body = is_wp_error( $res ) ? '' : (string) wp_remote_retrieve_body( $res );
-		$list = array_values( array_filter( array_map( 'trim', explode( "\n", $body ) ) ) );
-		set_transient( 'aipaygen_ppc_ai_ips', $list, $list ? DAY_IN_SECONDS : 15 * MINUTE_IN_SECONDS );
+		// Never wait for AIPayGen on a visitor's request: a slow or down answer must not slow a page for a person. Until the
+		// refresh (a one-off WP-Cron event) has run, nobody is charged by address, only by name; the placeholder keeps
+		// this from being scheduled again on every request.
+		set_transient( 'aipaygen_ppc_ai_ips', array(), 5 * MINUTE_IN_SECONDS );
+		if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
+			// WP-Cron is switched off here, so a scheduled event would never run: fetch after this visitor's page has been sent.
+			register_shutdown_function( 'aipaygen_ppc_refresh_ips_after_response' );
+		} else {
+			wp_schedule_single_event( time(), 'aipaygen_ppc_refresh_ips' );
+		}
+		$list = array();
 	}
 	$bin = inet_pton( $ip );
 	foreach ( (array) $list as $cidr ) {
@@ -468,9 +492,30 @@ function aipaygen_ppc_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
+	$aipaygen_ppc_route = (string) get_option( 'aipaygen_ppc_route', '' );
+	$aipaygen_ppc_q     = $aipaygen_ppc_route ? aipaygen_ppc_quote( $aipaygen_ppc_route ) : false;
+	$aipaygen_ppc_off   = is_array( $aipaygen_ppc_q ) && isset( $aipaygen_ppc_q['charge_mode'] ) && 'off' === $aipaygen_ppc_q['charge_mode'];
 	?>
 	<div class="wrap">
 		<h1><?php echo esc_html__( 'AIPayGen pay-per-crawl', 'aipaygen-pay-per-crawl' ); ?></h1>
+		<?php if ( aipaygen_ppc_report_url() ) : ?>
+			<?php if ( is_array( $aipaygen_ppc_q ) ) : ?>
+				<div class="notice notice-success inline"><p>
+					<strong><?php echo esc_html__( 'Route found.', 'aipaygen-pay-per-crawl' ); ?></strong>
+					<?php /* translators: %s: the route id */ echo esc_html( sprintf( __( 'AIPayGen knows route %s. The gateway secret is checked by Test my setup, or by your first counts.', 'aipaygen-pay-per-crawl' ), $aipaygen_ppc_route ) ); ?>
+				</p></div>
+			<?php else : ?>
+				<div class="notice notice-warning inline"><p>
+					<strong><?php echo esc_html__( 'Route not confirmed yet.', 'aipaygen-pay-per-crawl' ); ?></strong>
+					<?php /* translators: %s: the route id */ echo esc_html( sprintf( __( 'AIPayGen has no price answer for route %s. Check the route id below and save. A failed lookup is remembered for 5 minutes, so give it a few minutes before reloading this page.', 'aipaygen-pay-per-crawl' ), $aipaygen_ppc_route ) ); ?>
+				</p></div>
+			<?php endif; ?>
+			<p>
+				<?php echo esc_html__( 'After the first AI crawler visits, it shows in your report within about an hour (the plugin sends its counts hourly, when WordPress runs its scheduled tasks, which happens on site traffic, so a quiet site can take longer).', 'aipaygen-pay-per-crawl' ); ?>
+				<a href="<?php echo esc_url( aipaygen_ppc_report_url() . '#setup-test' ); ?>" target="_blank" rel="noopener"><?php echo esc_html__( 'Test my setup', 'aipaygen-pay-per-crawl' ); ?></a>
+				<?php echo esc_html__( '(opens your private report: press the button there)', 'aipaygen-pay-per-crawl' ); ?>
+			</p>
+		<?php endif; ?>
 		<p>
 			<?php echo esc_html__( 'Create a free route for this site (no wallet needed to start with the report; add one when you want to charge), then paste the route id and gateway secret here:', 'aipaygen-pay-per-crawl' ); ?>
 			<a href="<?php echo esc_url( AIPAYGEN_PPC_GATEWAY . '/pay-per-crawl#signup' ); ?>" target="_blank" rel="noopener"><?php echo esc_html__( 'create a route', 'aipaygen-pay-per-crawl' ); ?></a>
@@ -496,10 +541,6 @@ function aipaygen_ppc_settings_page() {
 				<?php echo esc_html__( '(keep this link private; counts arrive hourly)', 'aipaygen-pay-per-crawl' ); ?>
 			</p>
 		<?php endif; ?>
-		<?php
-		$aipaygen_ppc_q = get_option( 'aipaygen_ppc_route', '' ) ? aipaygen_ppc_quote( (string) get_option( 'aipaygen_ppc_route', '' ) ) : false;
-		$aipaygen_ppc_off = is_array( $aipaygen_ppc_q ) && isset( $aipaygen_ppc_q['charge_mode'] ) && 'off' === $aipaygen_ppc_q['charge_mode'];
-		?>
 		<?php if ( $aipaygen_ppc_off ) : ?>
 			<p><?php echo esc_html__( 'Report-only mode: AI crawlers still get your pages and are counted for the report. To start charging, add your wallet to the route (the report shows how); this plugin picks it up within an hour.', 'aipaygen-pay-per-crawl' ); ?></p>
 		<?php else : ?>
@@ -549,5 +590,6 @@ function aipaygen_ppc_uninstall() {
 	delete_option( 'aipaygen_ppc_counts' );
 	delete_option( 'aipaygen_ppc_setup_applied' );
 	wp_clear_scheduled_hook( 'aipaygen_ppc_send_counts' );
+	wp_clear_scheduled_hook( 'aipaygen_ppc_refresh_ips' );
 }
 register_uninstall_hook( __FILE__, 'aipaygen_ppc_uninstall' );

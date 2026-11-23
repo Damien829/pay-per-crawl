@@ -12,6 +12,11 @@
 	reverse_proxy @aipaygen_terms https://aipaygen.com {
 		rewrite /v1/gateway/terms/YOUR_ROUTE_ID
 		header_up Host {upstream_hostport}
+		# Never hold a visitor for long on our account (this path is only the terms file).
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 5s
+		}
 		@aipaygen_down status 429 5xx
 		handle_response @aipaygen_down {
 		}
@@ -29,6 +34,11 @@
 	reverse_proxy @aipaygen_ai https://aipaygen.com {
 		rewrite /g/YOUR_ROUTE_ID{uri}
 		header_up Host {upstream_hostport}
+		# Only an AI crawler or a paying client waits on AIPayGen; people and search engines never reach this.
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 30s
+		}
 		@aipaygen_down status 429 5xx
 		handle_response @aipaygen_down {
 			# A payment that can't be checked is not accepted: the client is told to retry.
