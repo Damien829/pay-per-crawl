@@ -49,7 +49,9 @@ function isAiIp(ip, wait) {
 // Answer AI crawlers here with your price; only paid retries go to AIPayGen.
 const [AIPAYGEN, ROUTE] = GATEWAY.split("/g/");
 // The first "still installed" report is due 10 minutes after this process starts (so short-lived isolates send none), then daily.
-let HB_AT = Date.now() - 864e5 + 6e5;
+// Read through hb(): a Worker has no clock at load (Date.now() is 0 in its global scope), so the 10 minutes start at the first request.
+let HB_AT = 0;
+function hb() { if (!HB_AT) HB_AT = Date.now() - 864e5 + 6e5; return HB_AT; }
 let QUOTE = null, QUOTE_AT = 0, HITS = {}, PAGES = {}, TERMS = {}, HIT_N = 0, SENT_AT = 0, FAST = {}, FAST_N = 0, FREE_USED = {}, FREE_WIN = "";
 // This site's AI Terms (what AI may do with its pages, per use; aipaygen.com/ai-terms), served at /.well-known/ai-terms.
 // isAi: whether the request comes from a published AI crawler address. A verified crawler (its name and that address)
@@ -163,7 +165,7 @@ async function aipaygenReport(secret) {
   const now = Date.now();
   // Installed but quiet: one empty report when this process first sees traffic, then at most once a day, so your report
   // shows the setup is live before any AI crawler comes (it carries no visitor data: counts {}).
-  if (!(HIT_N + FAST_N)) { if (now - HB_AT < 864e5) return; }
+  if (!(HIT_N + FAST_N)) { if (now - hb() < 864e5) return; }
   else if (HIT_N < every.max_hits && now - SENT_AT < Math.max(60, every.every_seconds) * 1000) return;
   const pages = Object.fromEntries(Object.entries(PAGES).sort((a, b) => b[1] - a[1]).slice(0, 10));
   const fast = Object.fromEntries(Object.entries(FAST).sort((a, b) => b[1].times - a[1].times).slice(0, 20));
@@ -187,7 +189,7 @@ function aipaygenNet(ip) {
   return g.length === 8 && g.every((x) => /^[0-9a-f]{1,4}$/i.test(x)) ? g.slice(0, 3).map((x) => parseInt(x, 16).toString(16)).join(":") + "::/48" : null;
 }
 function aipaygenWatch(ip, path, ua, secret) {
-  const net = aipaygenNet(ip), flush = () => (FAST_N || Date.now() - HB_AT >= 864e5 ? aipaygenReport(secret) : undefined);
+  const net = aipaygenNet(ip), flush = () => (FAST_N || Date.now() - hb() >= 864e5 ? aipaygenReport(secret) : undefined);
   if (!net) return flush();
   const now = Date.now(), lim = (QUOTE && QUOTE.fast) || { pages: 60, seconds: 60 };
   let s = SEEN.get(ip);
