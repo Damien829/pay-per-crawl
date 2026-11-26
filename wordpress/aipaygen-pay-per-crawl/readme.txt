@@ -4,7 +4,7 @@ Tags: ai crawlers, gptbot, robots, monetization, x402
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.6.4
+Stable tag: 2.6.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,17 +21,17 @@ AI crawlers (GPTBot, ClaudeBot, PerplexityBot, CCBot, Bytespider and others) rea
 
 == Third-party service ==
 
-This plugin relies on the AIPayGen gateway, a third-party service at https://aipaygen.com. It contacts the gateway in exactly these five cases, and in no others:
+This plugin relies on the AIPayGen gateway, a third-party service at https://aipaygen.com. It contacts the gateway in exactly these five cases, and in no others. Each one names the path it calls on the gateway, where {route} stands for your route id:
 
-1. **Price quote (about once an hour, or every 5 minutes while it can't get one):** downloads your route's price quote from https://aipaygen.com/v1/gateway/quote/<route>. With it, the plugin answers unpaid AI crawlers itself: an unpaid request is never sent to the gateway. The request names only your route id.
-2. **Paid requests (only when a request carries an x402 payment header):** the plugin sends the requested path and query string, the crawler's user agent and accept headers, the payment header and your route id to https://aipaygen.com/g/<route>. The gateway verifies the payment, fetches the page from your site (with your gateway secret, so the plugin lets it through) and settles the payment to your wallet. If that succeeds, WordPress serves the page to the crawler as usual. If the payment is refused or the gateway answers with an error, the crawler gets a JSON answer (a new quote or an error) and not the page. If the gateway can't be reached, the page is served as usual.
-3. **AI Terms (only when /.well-known/ai-terms is requested; a copy is kept 15 minutes, a failed download is retried after 5):** downloads your route's AI Terms from https://aipaygen.com/v1/gateway/terms/<route> and serves them at that address. The request names only your route id.
-4. **AI crawler counts (once an hour):** sends the number of AI crawler visits by crawler name, how many times each verified crawler read your AI Terms file, and the 10 most-requested paths to https://aipaygen.com/v1/gateway/hits/<route>, with your gateway secret, so your report can show them. No visitor IP addresses, cookies or personal data are sent. With a persistent object cache only: when one address asks for 60 or more pages in a minute while sending a browser user agent, this report also includes its network range (the first three parts of the address, e.g. 203.0.113.0/24, never the full address), the user agent and the page rate. Nothing is charged or blocked; it is listed in your report for you to judge.
+1. **Price quote (about once an hour, or every 5 minutes while it can't get one):** downloads your route's price quote from the gateway path `/v1/gateway/quote/{route}`. With it, the plugin answers unpaid AI crawlers itself: an unpaid request is never sent to the gateway. The request names only your route id.
+2. **Paid requests (only when a request carries an x402 payment header):** the plugin sends the requested path and query string, the crawler's user agent and accept headers, the payment header and your route id to the gateway path `/g/{route}`. The gateway verifies the payment, fetches the page from your site (with your gateway secret, so the plugin lets it through) and settles the payment to your wallet. If that succeeds, WordPress serves the page to the crawler as usual. If the payment is refused or the gateway answers with an error, the crawler gets a JSON answer (a new quote or an error) and not the page. If the gateway can't be reached, the page is served as usual.
+3. **AI Terms (only when /.well-known/ai-terms is requested; a copy is kept 15 minutes, a failed download is retried after 5):** downloads your route's AI Terms from the gateway path `/v1/gateway/terms/{route}` and serves them at that address. The request names only your route id.
+4. **AI crawler counts (once an hour):** sends the number of AI crawler visits by crawler name, how many times each verified crawler read your AI Terms file, and the 10 most-requested paths to the gateway path `/v1/gateway/hits/{route}`, with your gateway secret, so your report can show them. No visitor IP addresses, cookies or personal data are sent. With a persistent object cache only: when one address asks for 60 or more pages in a minute while sending a browser user agent, this report also includes its network range (the first three parts of the address, e.g. 203.0.113.0/24, never the full address), the user agent and the page rate. Nothing is charged or blocked; it is listed in your report for you to judge.
 5. **Crawler address list (once a day, or after 15 minutes if the download failed):** downloads the published AI crawler IP ranges from https://aipaygen.com/v1/ai_bot_ips. Nothing about your visitors is sent.
 
 Requests from people, search engines and logged-in users are never sent to the gateway. Calls 1, 3, 4 and 5 use the user agent "AIPayGen-WP/<version>" instead of WordPress's default, which would include your site's address; a paid request (2) carries the crawler's own user agent, as listed above.
 
-Service terms: https://aipaygen.com/terms
+Terms of use: https://aipaygen.com/terms
 Privacy policy: https://aipaygen.com/privacy
 
 == Installation ==
@@ -39,7 +39,7 @@ Privacy policy: https://aipaygen.com/privacy
 1. Install and activate the plugin.
 2. Create a free route for your site at https://aipaygen.com/pay-per-crawl: your site address and a price per page. Start with "None yet" to only see the report (no wallet needed), or add your wallet address on Base to charge.
 3. In WordPress, go to Settings > AIPayGen pay-per-crawl and paste the route id and gateway secret. (A download from your sign-up page on https://aipaygen.com already has both: upload and activate, and they are filled in.)
-4. Check it: in report-only mode your report shows AI crawler visits within about an hour. When charging, `curl -i -A GPTBot https://your-site.com/` should answer 402 with your price.
+4. Check it: in report-only mode your report shows AI crawler visits within about an hour. When charging, `curl -i -A GPTBot https://example.com/` (with your own site's address) should answer 402 with your price.
 
 == Frequently Asked Questions ==
 
@@ -60,6 +60,9 @@ GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User, Claude-SearchBot, P
 If it comes from an address its operator publishes (OpenAI, Anthropic, Perplexity, Mistral, DuckDuckGo, Common Crawl), it's charged anyway. Crawlers from operators that publish no address list (Bytespider, for example) are only caught by name, so one disguised as a browser gets the page free, the same as with robots.txt.
 
 == Changelog ==
+
+= 2.6.5 =
+* Readme: the gateway addresses the plugin calls are written as paths with a {route} placeholder instead of links, since without a route id they lead nowhere. The terms of use and privacy policy links are unchanged.
 
 = 2.6.4 =
 * A visitor's page never waits on AIPayGen: the list of AI crawler addresses is now fetched by a one-off WP-Cron event, not on the first page view after it expires (that view could wait up to 5 seconds when AIPayGen was slow). Until it has loaded, AI crawlers are recognised by name only. If WP-Cron is switched off (DISABLE_WP_CRON), the same fetch runs after that visitor's page has been sent instead, at most once every 5 minutes while it keeps failing.
