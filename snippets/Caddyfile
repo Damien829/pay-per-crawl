@@ -34,6 +34,12 @@
 	reverse_proxy @aipaygen_ai https://aipaygen.com {
 		rewrite /g/YOUR_ROUTE_ID{uri}
 		header_up Host {upstream_hostport}
+		# Who really visited and which of your sites they asked for, so a real crawler is checked against its company's
+		# addresses and a signed one against your site's name. AIPayGen believes these only with your gateway secret.
+		# (Caddy behind a CDN or load balancer: set trusted_proxies in your global options so {remote_host} is the visitor.)
+		header_up X-AIPayGen-Client-IP {remote_host}
+		header_up X-AIPayGen-Forwarded-Host {host}
+		header_up X-AIPayGen-Secret YOUR_GATEWAY_SECRET
 		# Only an AI crawler or a paying client waits on AIPayGen; people and search engines never reach this.
 		transport http {
 			dial_timeout 3s
