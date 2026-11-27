@@ -49,6 +49,7 @@ They are signed with a **test-only key** for the made-up host `signer.example`. 
 | Netlify | [`snippets/netlify-edge-function.js`](snippets/netlify-edge-function.js) (save as `netlify/edge-functions/aipaygen.js`). Follows Netlify's documented Edge Functions API and passes our tests against it in Node; not yet run on a live Netlify deploy |
 | Express / Node | [`snippets/express.js`](snippets/express.js) |
 | Django / Python | [`snippets/django_middleware.py`](snippets/django_middleware.py) (stdlib only; set `AIPAYGEN_ROUTE` and `AIPAYGEN_SECRET`) |
+| PHP / Laravel (any PHP 7.4+ site) | [`snippets/aipaygen.php`](snippets/aipaygen.php): put it next to your front controller (Laravel: `public/aipaygen.php`), then at the very top of that controller add `define('AIPAYGEN_SECRET', 'your gateway secret');` and `require __DIR__ . '/aipaygen.php';`. Download it from your sign-up page to get your route filled in, or replace `YOUR_ROUTE_ID` in this copy |
 
 On Cloudflare, the one-click Worker deploys in a minute; then set `AIPAYGEN_ROUTE` (your route id) and the secret `AIPAYGEN_SECRET` under Settings > Variables and Secrets if it did not ask for them, and add a route for your site (Workers > aipaygen-pay-per-crawl > Settings > Domains & Routes: `example.com/*`). For the snippets, replace `YOUR_ROUTE_ID` with your route id and set your gateway secret where the snippet says. Step-by-step guides: https://aipaygen.com/pay-per-crawl/setup/nginx (and `/wordpress`, `/cloudflare`, `/apache`, `/caddy`, `/nextjs`, `/express`, `/django`).
 
@@ -93,3 +94,5 @@ MIT for everything in this repository ([LICENSE](LICENSE)) except the WordPress 
 AIPayGen™ and the AIPayGen logo are trademarks of AIPayGen. The licences above cover the code, not the name: please don't use the name or logo for another product or package, or in a way that suggests we run or endorse it. Saying that your site or tool "works with AIPayGen" is fine.
 
 AI Terms is an open format. Anyone may implement, publish or read AI Terms files, and call them AI Terms, without asking.
+
+`snippets/SHA256SUMS` lists the SHA-256 of each file in `snippets/`, so you can check a copy you took from this repository (`cd snippets && shasum -a 256 -c SHA256SUMS`). A PHP include downloaded from your sign-up page has your route filled in, so its hash differs from the public copy here.
